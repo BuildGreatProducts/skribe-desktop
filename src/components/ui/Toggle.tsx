@@ -18,14 +18,14 @@ export function Toggle({ checked, onChange, label }: ToggleProps) {
       <span>{label}</span>
       <span
         className={clsx(
-          'relative h-5 w-9 rounded-[999px] border border-hairline transition',
+          'relative h-6 w-11 rounded-[999px] border border-hairline transition',
           checked ? 'bg-accent' : 'bg-chrome-bg',
         )}
       >
         <span
           className={clsx(
-            'absolute top-0.5 h-4 w-4 rounded-[999px] bg-paper transition',
-            checked ? 'left-4' : 'left-0.5',
+            'absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 rounded-[999px] bg-paper transition-transform',
+            checked ? 'translate-x-5' : 'translate-x-0',
           )}
         />
       </span>
