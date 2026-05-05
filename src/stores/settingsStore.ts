@@ -19,6 +19,7 @@ export const defaultSettings: AppSettings = {
   widgets: {
     wordCount: true,
     characterCount: true,
+    readingLevel: true,
   },
   ai: {
     autoFocusInputOnFolderOpen: false,

@@ -275,7 +275,7 @@ export function Settings({ open, onClose }: SettingsProps) {
                 onClick={() =>
                   void update((current) => ({
                     ...current,
-                    widgets: { wordCount: true, characterCount: true },
+                    widgets: { wordCount: true, characterCount: true, readingLevel: true },
                   }))
                 }
               >
@@ -299,6 +299,16 @@ export function Settings({ open, onClose }: SettingsProps) {
                 void update((current) => ({
                   ...current,
                   widgets: { ...current.widgets, characterCount: checked },
+                }))
+              }
+            />
+            <Toggle
+              label="Reading level"
+              checked={settings.widgets.readingLevel}
+              onChange={(checked) =>
+                void update((current) => ({
+                  ...current,
+                  widgets: { ...current.widgets, readingLevel: checked },
                 }))
               }
             />

@@ -40,6 +40,8 @@ pub struct WidgetSettings {
     pub word_count: bool,
     #[serde(default = "default_true")]
     pub character_count: bool,
+    #[serde(default = "default_true")]
+    pub reading_level: bool,
 }
 
 fn default_true() -> bool {
@@ -51,6 +53,7 @@ impl Default for WidgetSettings {
         Self {
             word_count: true,
             character_count: true,
+            reading_level: true,
         }
     }
 }
@@ -181,6 +184,7 @@ mod tests {
         assert!(settings.ai.project_writing_instructions.is_empty());
         assert!(settings.widgets.word_count);
         assert!(settings.widgets.character_count);
+        assert!(settings.widgets.reading_level);
     }
 
     #[test]
@@ -217,5 +221,6 @@ mod tests {
 
         assert!(!settings.widgets.word_count);
         assert!(settings.widgets.character_count);
+        assert!(settings.widgets.reading_level);
     }
 }

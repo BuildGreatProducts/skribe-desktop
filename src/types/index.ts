@@ -48,6 +48,7 @@ export type AppSettings = {
   widgets: {
     wordCount: boolean;
     characterCount: boolean;
+    readingLevel: boolean;
   };
   ai: {
     autoFocusInputOnFolderOpen: boolean;
