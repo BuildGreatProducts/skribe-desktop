@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+src-tauri/target
+src-tauri/binaries/acp-sidecar-*
+src-tauri/gen
+sidecar-acp/dist
+coverage
+.env
+.env.*

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+if [ -f "$APP_ROOT/sidecar-acp/dist/index.js" ]; then
+  exec node "$APP_ROOT/sidecar-acp/dist/index.js" "$@"
+fi
+
+if [ -f "$SCRIPT_DIR/../Resources/sidecar-acp/dist/index.js" ]; then
+  exec node "$SCRIPT_DIR/../Resources/sidecar-acp/dist/index.js" "$@"
+fi
+
+echo "Skribe ACP sidecar could not locate sidecar-acp/dist/index.js" >&2
+exit 127

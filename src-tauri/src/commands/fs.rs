@@ -1,0 +1,465 @@
+use crate::{
+    error::AppError,
+    models::{FsChangePayload, MarkdownFile},
+    state::WatcherState,
+};
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    io::Write,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+use tauri::{AppHandle, Emitter, State};
+use tauri_plugin_dialog::DialogExt;
+use walkdir::{DirEntry, WalkDir};
+
+const IGNORED_DIRS: &[&str] = &[".git", "node_modules", "dist", "build", "target"];
+const MAX_FILE_SIZE: u64 = 5 * 1024 * 1024;
+
+#[tauri::command]
+pub async fn fs_pick_folder(app: AppHandle) -> Result<Option<String>, AppError> {
+    let picked = app.dialog().file().blocking_pick_folder();
+    let Some(path) = picked else {
+        return Ok(None);
+    };
+    let path = path
+        .into_path()
+        .map_err(|_| AppError::FsInvalidPath("Could not resolve selected folder path".into()))?;
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+pub fn fs_list_markdown_files(
+    folder_path: String,
+    watcher_state: State<WatcherState>,
+) -> Result<Vec<MarkdownFile>, AppError> {
+    let folder = canonical_folder(&folder_path)?;
+    watcher_state
+        .open_folder
+        .lock()
+        .map_err(|_| AppError::internal("Open folder state poisoned"))?
+        .replace(folder.clone());
+
+    let mut files = Vec::new();
+    let walker = WalkDir::new(&folder)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(should_descend_into);
+
+    for entry in walker {
+        let entry = entry.map_err(|error| AppError::internal(error.to_string()))?;
+        if !entry.file_type().is_file() || !is_markdown_path(entry.path()) {
+            continue;
+        }
+        let metadata = entry
+            .metadata()
+            .map_err(|error| AppError::internal(error.to_string()))?;
+        if metadata.len() > MAX_FILE_SIZE {
+            continue;
+        }
+        files.push(markdown_file_from_path(
+            &folder,
+            entry.path(),
+            metadata.len(),
+        )?);
+    }
+
+    files.sort_by(|a, b| {
+        a.relative_path
+            .to_lowercase()
+            .cmp(&b.relative_path.to_lowercase())
+    });
+    Ok(files)
+}
+
+#[tauri::command]
+pub fn fs_read_file(
+    file_path: String,
+    watcher_state: State<WatcherState>,
+) -> Result<String, AppError> {
+    let path = validate_markdown_file(&file_path, &watcher_state)?;
+    fs::read_to_string(path).map_err(AppError::from)
+}
+
+#[tauri::command]
+pub fn fs_write_file(
+    file_path: String,
+    content: String,
+    watcher_state: State<WatcherState>,
+) -> Result<(), AppError> {
+    let path = validate_markdown_file(&file_path, &watcher_state)?;
+    atomic_write(&path, content.as_bytes())
+}
+
+#[tauri::command]
+pub fn fs_create_file(
+    folder_path: String,
+    file_name: String,
+    watcher_state: State<WatcherState>,
+) -> Result<MarkdownFile, AppError> {
+    let folder = canonical_folder(&folder_path)?;
+    watcher_state
+        .open_folder
+        .lock()
+        .map_err(|_| AppError::internal("Open folder state poisoned"))?
+        .replace(folder.clone());
+
+    let safe_name = sanitize_file_name(&file_name)?;
+    let target = dedupe_path(&folder, &safe_name);
+    atomic_write(&target, b"")?;
+    let metadata = fs::metadata(&target)?;
+    markdown_file_from_path(&folder, &target, metadata.len())
+}
+
+#[tauri::command]
+pub fn fs_rename_file(
+    old_path: String,
+    new_name: String,
+    watcher_state: State<WatcherState>,
+) -> Result<MarkdownFile, AppError> {
+    let old = validate_markdown_file(&old_path, &watcher_state)?;
+    let folder = open_folder(&watcher_state)?;
+    let safe_name = sanitize_file_name(&new_name)?;
+    let new_path = old
+        .parent()
+        .ok_or_else(|| AppError::FsInvalidPath("File has no parent folder".into()))?
+        .join(safe_name);
+
+    ensure_inside(&folder, &new_path)?;
+    if new_path.exists() {
+        return Err(AppError::FsInvalidPath(
+            "A file with that name already exists".into(),
+        ));
+    }
+    fs::rename(&old, &new_path)?;
+    let metadata = fs::metadata(&new_path)?;
+    markdown_file_from_path(&folder, &new_path, metadata.len())
+}
+
+#[tauri::command]
+pub fn fs_delete_file(
+    file_path: String,
+    watcher_state: State<WatcherState>,
+) -> Result<(), AppError> {
+    let path = validate_markdown_file(&file_path, &watcher_state)?;
+    trash::delete(path).map_err(|error| AppError::internal(error.to_string()))
+}
+
+#[tauri::command]
+pub fn fs_watch_folder(
+    app: AppHandle,
+    folder_path: String,
+    watcher_state: State<WatcherState>,
+) -> Result<(), AppError> {
+    let folder = canonical_folder(&folder_path)?;
+    let debounced = Arc::new(Mutex::new(HashMap::<PathBuf, Instant>::new()));
+    let app_handle = app.clone();
+
+    let mut watcher: RecommendedWatcher =
+        notify::recommended_watcher(move |result: Result<Event, notify::Error>| {
+            let Ok(event) = result else {
+                return;
+            };
+
+            let Some(kind) = map_event_kind(&event.kind) else {
+                return;
+            };
+
+            for path in event.paths {
+                if !is_markdown_path(&path) {
+                    continue;
+                }
+                let now = Instant::now();
+                let should_emit = {
+                    let mut seen = match debounced.lock() {
+                        Ok(seen) => seen,
+                        Err(_) => return,
+                    };
+                    match seen.get(&path) {
+                        Some(last) if now.duration_since(*last) < Duration::from_millis(200) => {
+                            false
+                        }
+                        _ => {
+                            seen.insert(path.clone(), now);
+                            true
+                        }
+                    }
+                };
+                if should_emit {
+                    let _ = app_handle.emit(
+                        "fs:change",
+                        FsChangePayload {
+                            event: kind.to_string(),
+                            path: path.to_string_lossy().to_string(),
+                        },
+                    );
+                }
+            }
+        })?;
+
+    watcher.watch(&folder, RecursiveMode::Recursive)?;
+    watcher_state
+        .watcher
+        .lock()
+        .map_err(|_| AppError::internal("Watcher state poisoned"))?
+        .replace(watcher);
+    watcher_state
+        .open_folder
+        .lock()
+        .map_err(|_| AppError::internal("Open folder state poisoned"))?
+        .replace(folder);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn fs_unwatch_folder(watcher_state: State<WatcherState>) -> Result<(), AppError> {
+    watcher_state
+        .watcher
+        .lock()
+        .map_err(|_| AppError::internal("Watcher state poisoned"))?
+        .take();
+    watcher_state
+        .open_folder
+        .lock()
+        .map_err(|_| AppError::internal("Open folder state poisoned"))?
+        .take();
+    Ok(())
+}
+
+fn canonical_folder(folder_path: &str) -> Result<PathBuf, AppError> {
+    let folder = fs::canonicalize(folder_path)?;
+    if !folder.is_dir() {
+        return Err(AppError::FsInvalidPath(
+            "Selected path is not a folder".into(),
+        ));
+    }
+    Ok(folder)
+}
+
+fn open_folder(watcher_state: &State<WatcherState>) -> Result<PathBuf, AppError> {
+    watcher_state
+        .open_folder
+        .lock()
+        .map_err(|_| AppError::internal("Open folder state poisoned"))?
+        .clone()
+        .ok_or_else(|| AppError::FsInvalidPath("No folder is currently open".into()))
+}
+
+fn validate_markdown_file(
+    file_path: &str,
+    watcher_state: &State<WatcherState>,
+) -> Result<PathBuf, AppError> {
+    let folder = open_folder(watcher_state)?;
+    let path = PathBuf::from(file_path);
+    ensure_inside(&folder, &path)?;
+    if !is_markdown_path(&path) {
+        return Err(AppError::FsInvalidPath(
+            "Only markdown files can be opened".into(),
+        ));
+    }
+    Ok(path)
+}
+
+fn ensure_inside(folder: &Path, path: &Path) -> Result<(), AppError> {
+    let canonical_parent = if path.exists() {
+        fs::canonicalize(path)?
+    } else {
+        let parent = path
+            .parent()
+            .ok_or_else(|| AppError::FsInvalidPath("Path has no parent".into()))?;
+        fs::canonicalize(parent)?
+    };
+    if canonical_parent.starts_with(folder) {
+        Ok(())
+    } else {
+        Err(AppError::FsInvalidPath(
+            "Path is outside the open folder".into(),
+        ))
+    }
+}
+
+fn should_descend_into(entry: &DirEntry) -> bool {
+    if entry.depth() == 0 {
+        return true;
+    }
+    let name = entry.file_name().to_string_lossy();
+    if entry.file_type().is_dir() {
+        if name.starts_with('.') {
+            return false;
+        }
+        return !IGNORED_DIRS.contains(&name.as_ref());
+    }
+    true
+}
+
+fn is_markdown_path(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|extension| extension.to_str()).map(str::to_lowercase),
+        Some(extension) if extension == "md" || extension == "markdown"
+    )
+}
+
+fn markdown_file_from_path(
+    folder: &Path,
+    path: &Path,
+    size: u64,
+) -> Result<MarkdownFile, AppError> {
+    let relative_path = path
+        .strip_prefix(folder)
+        .map_err(|_| AppError::FsInvalidPath("File is outside the open folder".into()))?
+        .to_string_lossy()
+        .to_string();
+    let modified_at = fs::metadata(path)?
+        .modified()
+        .unwrap_or(SystemTime::UNIX_EPOCH)
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+
+    Ok(MarkdownFile {
+        path: path.to_string_lossy().to_string(),
+        relative_path,
+        name: path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string(),
+        size,
+        modified_at,
+    })
+}
+
+fn sanitize_file_name(file_name: &str) -> Result<String, AppError> {
+    let trimmed = file_name.trim();
+    if trimmed.is_empty()
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || trimmed.contains(':')
+        || trimmed == "."
+        || trimmed == ".."
+    {
+        return Err(AppError::FsInvalidPath(
+            "Use a valid markdown filename".into(),
+        ));
+    }
+    let mut name = trimmed.to_string();
+    if !name.ends_with(".md") && !name.ends_with(".markdown") {
+        name.push_str(".md");
+    }
+    Ok(name)
+}
+
+fn dedupe_path(folder: &Path, file_name: &str) -> PathBuf {
+    let base = Path::new(file_name)
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy();
+    let extension = Path::new(file_name)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("md");
+
+    let mut candidate = folder.join(file_name);
+    let mut count = 2;
+    while candidate.exists() {
+        candidate = folder.join(format!("{base} {count}.{extension}"));
+        count += 1;
+    }
+    candidate
+}
+
+fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
+    let tmp = path.with_extension(format!(
+        "{}.skribe.tmp",
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("md")
+    ));
+    {
+        let mut file = File::create(&tmp)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+    }
+    fs::rename(tmp, path)?;
+    Ok(())
+}
+
+fn map_event_kind(kind: &EventKind) -> Option<&'static str> {
+    match kind {
+        EventKind::Create(_) => Some("created"),
+        EventKind::Modify(_) => Some("modified"),
+        EventKind::Remove(_) => Some("deleted"),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{dedupe_path, is_markdown_path, sanitize_file_name, should_descend_into};
+    use std::{fs, path::Path};
+    use walkdir::WalkDir;
+
+    #[test]
+    fn recognizes_markdown_extensions() {
+        assert!(is_markdown_path(Path::new("README.md")));
+        assert!(is_markdown_path(Path::new("notes.MARKDOWN")));
+        assert!(!is_markdown_path(Path::new("image.png")));
+    }
+
+    #[test]
+    fn walks_selected_root_and_skips_ignored_dirs() {
+        let root = std::env::temp_dir().join(format!("skribe-walk-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("docs")).unwrap();
+        fs::create_dir_all(root.join("a/b/c/d/e/f")).unwrap();
+        fs::create_dir_all(root.join(".git")).unwrap();
+        fs::write(root.join("README.md"), "# Readme").unwrap();
+        fs::write(root.join("docs").join("notes.markdown"), "# Notes").unwrap();
+        fs::write(root.join("a/b/c/d/e/f").join("deep.md"), "# Deep").unwrap();
+        fs::write(root.join(".git").join("ignored.md"), "# Ignored").unwrap();
+
+        let files = WalkDir::new(&root)
+            .follow_links(false)
+            .into_iter()
+            .filter_entry(should_descend_into)
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().is_file() && is_markdown_path(entry.path()))
+            .map(|entry| {
+                entry
+                    .path()
+                    .strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect::<Vec<_>>();
+
+        assert!(files.contains(&"README.md".to_string()));
+        assert!(files.contains(&"docs/notes.markdown".to_string()));
+        assert!(files.contains(&"a/b/c/d/e/f/deep.md".to_string()));
+        assert!(!files.contains(&".git/ignored.md".to_string()));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn prepares_new_markdown_file_names_in_the_open_folder_root() {
+        let root = std::env::temp_dir().join(format!("skribe-create-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("Untitled.md"), "").unwrap();
+        fs::write(root.join("Untitled 2.md"), "").unwrap();
+
+        let safe_name = sanitize_file_name("Untitled").unwrap();
+        let next_path = dedupe_path(&root, &safe_name);
+
+        assert_eq!(safe_name, "Untitled.md");
+        assert_eq!(next_path, root.join("Untitled 3.md"));
+        assert!(sanitize_file_name("../notes.md").is_err());
+
+        let _ = fs::remove_dir_all(root);
+    }
+}
