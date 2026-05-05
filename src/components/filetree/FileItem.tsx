@@ -16,6 +16,7 @@ type FileItemProps = {
   aiRunning: boolean;
   dirty: boolean;
   menuOpen: boolean;
+  showParentFolder?: boolean;
   onOpen: (file: MarkdownFile) => void;
   onMenuOpenChange: (open: boolean) => void;
   onRename: (file: MarkdownFile, name: string) => void;
@@ -28,6 +29,7 @@ export function FileItem({
   aiRunning,
   dirty,
   menuOpen,
+  showParentFolder = true,
   onOpen,
   onMenuOpenChange,
   onRename,
@@ -108,6 +110,7 @@ export function FileItem({
   }
 
   const parentFolder = parentFolderName(file.relativePath);
+  const showFolderLabel = showParentFolder && Boolean(parentFolder);
 
   return (
     <div
@@ -127,13 +130,13 @@ export function FileItem({
     >
       <DocumentPreview active={active} running={aiRunning} text={previewText} />
       <div className="flex min-w-0 flex-1 flex-col justify-center pr-7">
-        {parentFolder ? (
+        {showFolderLabel ? (
           <span
             className={clsx(
               'mb-0.5 block truncate text-[11px] font-medium leading-tight',
               active ? 'text-accent/75' : 'text-chrome-text-soft',
             )}
-            title={parentPath(file.relativePath) ?? parentFolder}
+            title={parentPath(file.relativePath) ?? parentFolder ?? undefined}
           >
             {parentFolder}
           </span>
@@ -146,7 +149,7 @@ export function FileItem({
         >
           {markdownNameStem(file.name)}
         </span>
-        {!parentFolder ? (
+        {!showFolderLabel ? (
           <span className="mt-1 block truncate text-xs leading-tight text-chrome-text-soft">
             {fileSecondaryLabel(previewText)}
           </span>
