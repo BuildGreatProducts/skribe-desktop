@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { errorMessage, tauriClient } from '../lib/tauri';
-import { DEFAULT_GLOBAL_WRITING_INSTRUCTIONS } from '../lib/writingInstructions';
+import {
+  DEFAULT_GLOBAL_WRITING_INSTRUCTIONS,
+  settingsWithDefaultWritingInstructions,
+} from '../lib/writingInstructions';
 import type { AppSettings } from '../types';
 
 export const defaultSettings: AppSettings = {
@@ -53,7 +56,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   error: null,
   load: async () => {
     try {
-      const settings = await tauriClient.settings.load();
+      const settings = settingsWithDefaultWritingInstructions(
+        await tauriClient.settings.load(),
+      );
       applyAccent(settings);
       set({ settings, loaded: true, error: null });
     } catch (error) {
@@ -71,7 +76,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   addRecentFolder: async (folderPath) => {
     try {
-      const settings = await tauriClient.settings.addRecentFolder(folderPath);
+      const settings = settingsWithDefaultWritingInstructions(
+        await tauriClient.settings.addRecentFolder(folderPath),
+      );
       applyAccent(settings);
       set({ settings });
     } catch (error) {

@@ -2,11 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 const DEFAULT_GLOBAL_WRITING_INSTRUCTIONS: &str = r#"Write like a careful human editor, not a content bot.
-- Use plain, concrete language; cut throat-clearing, filler, hedging, and generic summaries.
-- Vary rhythm with short and long sentences. Let occasional fragments stand when natural.
-- Prefer specific examples, texture, and a clear point of view over vague balanced claims.
-- Avoid stock AI phrases like "delve", "leverage", "landscape", "it is important to note", and "in conclusion".
-- Never invent personal experience, facts, or sources."#;
+Use plain, concrete language, vary the rhythm, and keep the author's point of view.
+Cut filler, hype, hedging, generic summaries, and stock AI phrasing.
+Do not invent facts, sources, or personal experience."#;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
