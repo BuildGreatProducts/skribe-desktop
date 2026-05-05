@@ -88,10 +88,14 @@ async function handlePrompt(command: PromptCommand) {
     documentReferences: command.documentReferences,
   });
 
-  current = spawn('claude', buildClaudeArgs(command.systemPrompt), {
-    cwd: process.cwd(),
-    env: process.env,
-  });
+  current = spawn(
+    process.env.CLAUDE_CODE_PATH?.trim() || 'claude',
+    buildClaudeArgs(command.systemPrompt),
+    {
+      cwd: process.cwd(),
+      env: process.env,
+    },
+  );
 
   current.stdin.on('error', () => undefined);
   current.stdin.end(scaffolded);
