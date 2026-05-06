@@ -61,6 +61,11 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
       run: () => editor.chain().focus().toggleBlockquote().run(),
     },
     {
+      label: 'Code',
+      active: () => editor.isActive('codeBlock'),
+      run: () => editor.chain().focus().toggleCodeBlock().run(),
+    },
+    {
       label: 'Bullets',
       active: () => editor.isActive('bulletList'),
       run: () => editor.chain().focus().toggleBulletList().run(),

@@ -13,6 +13,9 @@ describe('buildSkribePrompt', () => {
 
     expect(prompt).toContain('complete final Markdown contents');
     expect(prompt).toContain('/tmp/project/README.md');
+    expect(prompt).toContain('Do not add an outer code fence');
+    expect(prompt).toContain('file trees');
+    expect(prompt).toContain('text fence');
     expect(prompt).not.toContain('SKRIBE_SELECTED_TEXT');
   });
 
@@ -25,6 +28,8 @@ describe('buildSkribePrompt', () => {
     expect(prompt).toContain('selected text only');
     expect(prompt).toContain('selected text');
     expect(prompt).toContain('replacement Markdown for the highlighted text');
+    expect(prompt).toContain('Do not add an outer code fence');
+    expect(prompt).toContain('file trees');
     expect(prompt).not.toContain('complete final Markdown contents');
   });
 

@@ -88,7 +88,7 @@ pub fn acp_start(
         .ok_or_else(|| AppError::AcpSidecarFailed("Could not open sidecar stderr".into()))?;
 
     spawn_stdout_relay(app.clone(), stdout);
-    spawn_stderr_relay(app.clone(), session_id.clone(), stderr);
+    spawn_stderr_drain(stderr);
 
     let mut process = AcpProcess { child, stdin };
     process
@@ -215,20 +215,12 @@ fn spawn_stdout_relay(app: AppHandle, stdout: std::process::ChildStdout) {
     });
 }
 
-fn spawn_stderr_relay(app: AppHandle, session_id: String, stderr: std::process::ChildStderr) {
+fn spawn_stderr_drain(stderr: std::process::ChildStderr) {
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines().map_while(Result::ok) {
             if !line.trim().is_empty() {
-                let _ = app.emit(
-                    "acp:complete",
-                    json!({
-                        "sessionId": session_id,
-                        "status": "error",
-                        "code": "ACP_SIDECAR_FAILED",
-                        "error": line
-                    }),
-                );
+                eprintln!("ACP sidecar stderr: {line}");
             }
         }
     });

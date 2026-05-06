@@ -111,9 +111,19 @@ select {
   padding: var(--space-4);
 }
 
+.ProseMirror.ProseMirror pre {
+  /* Tiptap injects pre-wrap for editing; file trees need preserved columns. */
+  white-space: pre;
+}
+
 .ProseMirror pre code {
   background: transparent;
+  font-size: inherit;
   padding: 0;
+}
+
+.ProseMirror.ProseMirror pre code {
+  white-space: inherit;
 }
 
 .ProseMirror a {

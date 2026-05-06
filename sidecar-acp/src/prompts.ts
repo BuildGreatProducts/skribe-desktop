@@ -42,7 +42,7 @@ Use Claude Code's file tools when useful:
 - Preserve surrounding document context. Do not rewrite unrelated text.
 - If the user asks to create another file, describe the requested file content in your final response instead of writing it.
 
-Output only the replacement Markdown for the highlighted text. Do not output the complete document. Do not wrap it in a code fence. Do not include commentary.`;
+Output only the replacement Markdown for the highlighted text. Do not output the complete document. Do not add an outer code fence around your response. Still use normal Markdown code fences inside the content for literal code, terminal output, and file trees; use a text fence for directory/file trees. Do not include commentary.`;
   }
 
   return `${prompt}
@@ -58,7 +58,7 @@ Use Claude Code's file tools when useful:
 - Do not use file modification tools. Skribe will apply your final Markdown to the active file.
 - If the user asks to create another file, describe the requested file content in your final response instead of writing it.
 
-Output only the complete final Markdown contents of the active document. Do not wrap it in a code fence. Do not include commentary.`;
+Output only the complete final Markdown contents of the active document. Do not add an outer code fence around your response. Still use normal Markdown code fences inside the document for literal code, terminal output, and file trees; use a text fence for directory/file trees. Do not include commentary.`;
 }
 
 function documentReferenceContextBlock(documentReferences?: DocumentReference[] | null): string {
