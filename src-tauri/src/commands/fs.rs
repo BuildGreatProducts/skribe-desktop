@@ -1,6 +1,6 @@
 use crate::{
     error::AppError,
-    models::{FsChangePayload, MarkdownFile},
+    models::{FsChangePayload, MarkdownFile, PromptAttachment},
     state::WatcherState,
 };
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -18,6 +18,7 @@ use walkdir::{DirEntry, WalkDir};
 
 const IGNORED_DIRS: &[&str] = &[".git", "node_modules", "dist", "build", "target"];
 const MAX_FILE_SIZE: u64 = 5 * 1024 * 1024;
+const MAX_ATTACHMENT_PREVIEW_BYTES: u64 = 512 * 1024;
 
 #[tauri::command]
 pub async fn fs_pick_folder(app: AppHandle) -> Result<Option<String>, AppError> {
@@ -146,6 +147,43 @@ pub fn fs_delete_file(
 ) -> Result<(), AppError> {
     let path = validate_markdown_file(&file_path, &watcher_state)?;
     trash::delete(path).map_err(|error| AppError::internal(error.to_string()))
+}
+
+#[tauri::command]
+pub fn fs_describe_attachments(paths: Vec<String>) -> Result<Vec<PromptAttachment>, AppError> {
+    let mut attachments = Vec::new();
+
+    for path in paths {
+        let Ok(canonical) = fs::canonicalize(&path) else {
+            continue;
+        };
+        let Ok(metadata) = fs::metadata(&canonical) else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+
+        let mime_type = mime_type_for_path(&canonical);
+        attachments.push(PromptAttachment {
+            path: canonical.to_string_lossy().to_string(),
+            name: canonical
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
+            size: metadata.len(),
+            kind: attachment_kind(&canonical, mime_type.as_deref()).to_string(),
+            preview_data_url: attachment_preview_data_url(
+                &canonical,
+                metadata.len(),
+                mime_type.as_deref(),
+            )?,
+            mime_type,
+        });
+    }
+
+    Ok(attachments)
 }
 
 #[tauri::command]
@@ -300,6 +338,102 @@ fn is_markdown_path(path: &Path) -> bool {
         path.extension().and_then(|extension| extension.to_str()).map(str::to_lowercase),
         Some(extension) if extension == "md" || extension == "markdown"
     )
+}
+
+fn attachment_kind(path: &Path, mime_type: Option<&str>) -> &'static str {
+    if mime_type.is_some_and(|mime_type| mime_type.starts_with("image/")) {
+        return "image";
+    }
+    if mime_type == Some("application/pdf") {
+        return "pdf";
+    }
+    if mime_type.is_some_and(|mime_type| mime_type.starts_with("text/")) || is_markdown_path(path) {
+        return "text";
+    }
+    "file"
+}
+
+fn mime_type_for_path(path: &Path) -> Option<String> {
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())?
+        .to_lowercase();
+    let mime_type = match extension.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "pdf" => "application/pdf",
+        "md" | "markdown" => "text/markdown",
+        "txt" => "text/plain",
+        "csv" => "text/csv",
+        "json" => "application/json",
+        "html" | "htm" => "text/html",
+        "css" => "text/css",
+        "js" | "mjs" | "cjs" => "text/javascript",
+        "ts" | "tsx" => "text/typescript",
+        "rs" => "text/rust",
+        "py" => "text/x-python",
+        "toml" => "text/toml",
+        "yaml" | "yml" => "text/yaml",
+        "xml" => "application/xml",
+        _ => return None,
+    };
+    Some(mime_type.to_string())
+}
+
+fn attachment_preview_data_url(
+    path: &Path,
+    size: u64,
+    mime_type: Option<&str>,
+) -> Result<Option<String>, AppError> {
+    let Some(mime_type) = mime_type else {
+        return Ok(None);
+    };
+    if size > MAX_ATTACHMENT_PREVIEW_BYTES || !is_previewable_image_mime(mime_type) {
+        return Ok(None);
+    }
+
+    let bytes = fs::read(path)?;
+    Ok(Some(format!(
+        "data:{mime_type};base64,{}",
+        base64_encode(&bytes)
+    )))
+}
+
+fn is_previewable_image_mime(mime_type: &str) -> bool {
+    matches!(
+        mime_type,
+        "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+    )
+}
+
+fn base64_encode(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut encoded = String::with_capacity(bytes.len().div_ceil(3) * 4);
+
+    for chunk in bytes.chunks(3) {
+        let first = chunk[0];
+        let second = chunk.get(1).copied().unwrap_or(0);
+        let third = chunk.get(2).copied().unwrap_or(0);
+        let combined = ((first as u32) << 16) | ((second as u32) << 8) | third as u32;
+
+        encoded.push(TABLE[((combined >> 18) & 0x3f) as usize] as char);
+        encoded.push(TABLE[((combined >> 12) & 0x3f) as usize] as char);
+        encoded.push(if chunk.len() > 1 {
+            TABLE[((combined >> 6) & 0x3f) as usize] as char
+        } else {
+            '='
+        });
+        encoded.push(if chunk.len() > 2 {
+            TABLE[(combined & 0x3f) as usize] as char
+        } else {
+            '='
+        });
+    }
+
+    encoded
 }
 
 fn markdown_file_from_path(

@@ -14,6 +14,7 @@ import type {
   AppErrorCode,
   DocumentReference,
   PendingClarification,
+  PromptAttachment,
 } from '../types';
 
 export type StreamPreview = {
@@ -59,6 +60,8 @@ type AiState = {
   prompt: string;
   promptFilePath: string | null;
   promptTarget: AiPromptTarget;
+  promptDocumentReferences: DocumentReference[];
+  promptAttachments: PromptAttachment[];
   partialResponse: string;
   streamPreview: StreamPreview;
   pendingClarification: PendingClarification | null;
@@ -72,6 +75,7 @@ type AiState = {
     activeFilePath: string,
     target?: AiPromptTarget,
     documentReferences?: DocumentReference[],
+    attachments?: PromptAttachment[],
   ) => Promise<void>;
   respondClarification: (optionId: string | null, response: string | null) => Promise<void>;
   cancel: () => Promise<void>;
@@ -86,6 +90,8 @@ export const useAiStore = create<AiState>((set, get) => ({
   prompt: '',
   promptFilePath: null,
   promptTarget: documentPromptTarget,
+  promptDocumentReferences: [],
+  promptAttachments: [],
   partialResponse: '',
   streamPreview: hiddenStreamPreview,
   pendingClarification: null,
@@ -222,6 +228,8 @@ export const useAiStore = create<AiState>((set, get) => ({
       partialResponse: '',
       promptFilePath: null,
       promptTarget: documentPromptTarget,
+      promptDocumentReferences: [],
+      promptAttachments: [],
       streamPreview: hiddenStreamPreview,
       pendingClarification: null,
       error: null,
@@ -233,6 +241,7 @@ export const useAiStore = create<AiState>((set, get) => ({
     activeFilePath,
     target = documentPromptTarget,
     documentReferences = [],
+    attachments = [],
   ) => {
     const sessionId = get().sessionId;
     if (!sessionId || !prompt.trim()) return;
@@ -242,6 +251,8 @@ export const useAiStore = create<AiState>((set, get) => ({
       prompt,
       promptFilePath: activeFilePath,
       promptTarget,
+      promptDocumentReferences: documentReferences,
+      promptAttachments: attachments,
       partialResponse: '',
       streamPreview: pendingStreamPreview,
       pendingClarification: null,
@@ -249,8 +260,9 @@ export const useAiStore = create<AiState>((set, get) => ({
       acceptingStream: true,
     });
     try {
+      const settings = useSettingsStore.getState().settings;
       const systemPrompt = buildWritingInstructionsSystemPrompt(
-        useSettingsStore.getState().settings,
+        settings,
         useFolderStore.getState().path,
       );
       await tauriClient.acp.sendPrompt(
@@ -260,6 +272,8 @@ export const useAiStore = create<AiState>((set, get) => ({
         systemPrompt,
         selectedTextForPromptTarget(activeFilePath, promptTarget),
         documentReferences,
+        attachments,
+        settings.ai.dangerouslySkipPermissions,
       );
       set({ status: 'streaming' });
     } catch (error) {
@@ -286,6 +300,8 @@ export const useAiStore = create<AiState>((set, get) => ({
       partialResponse: '',
       pendingClarification: null,
       promptFilePath: null,
+      promptDocumentReferences: [],
+      promptAttachments: [],
       streamPreview: hiddenStreamPreview,
       acceptingStream: false,
     });
@@ -306,6 +322,8 @@ export const useAiStore = create<AiState>((set, get) => ({
       streamPreview: hiddenStreamPreview,
       pendingClarification: null,
       promptFilePath: null,
+      promptDocumentReferences: [],
+      promptAttachments: [],
       acceptingStream: false,
     });
   },

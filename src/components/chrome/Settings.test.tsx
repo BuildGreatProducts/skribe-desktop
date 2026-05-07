@@ -57,4 +57,22 @@ describe('Settings', () => {
 
     expect(instructions).toHaveValue('Keep it warm and direct.');
   });
+
+  it('toggles the Claude Code permission bypass setting', () => {
+    render(<Settings open onClose={() => undefined} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'AI' }));
+    const toggle = screen.getByRole('switch', {
+      name: 'Dangerously skip Claude Code permissions',
+    });
+
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(toggle);
+
+    expect(useSettingsStore.getState().settings.ai.dangerouslySkipPermissions).toBe(
+      true,
+    );
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
 });

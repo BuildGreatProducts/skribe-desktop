@@ -5,6 +5,7 @@ import type {
   ClaudePreflight,
   DocumentReference,
   MarkdownFile,
+  PromptAttachment,
 } from '../types';
 
 export const tauriClient = {
@@ -20,6 +21,8 @@ export const tauriClient = {
     renameFile: (oldPath: string, newName: string) =>
       invoke<MarkdownFile>('fs_rename_file', { oldPath, newName }),
     deleteFile: (filePath: string) => invoke<void>('fs_delete_file', { filePath }),
+    describeAttachments: (paths: string[]) =>
+      invoke<PromptAttachment[]>('fs_describe_attachments', { paths }),
     watchFolder: (folderPath: string) => invoke<void>('fs_watch_folder', { folderPath }),
     unwatchFolder: () => invoke<void>('fs_unwatch_folder'),
   },
@@ -42,6 +45,8 @@ export const tauriClient = {
       systemPrompt: string,
       selectedText?: string,
       documentReferences?: DocumentReference[],
+      attachments?: PromptAttachment[],
+      dangerouslySkipPermissions = false,
     ) =>
       invoke<void>('acp_send_prompt', {
         sessionId,
@@ -50,6 +55,8 @@ export const tauriClient = {
         systemPrompt,
         selectedText,
         documentReferences,
+        attachments: attachments?.map(attachmentPayload),
+        dangerouslySkipPermissions,
       }),
     respondClarification: (
       sessionId: string,
@@ -65,6 +72,16 @@ export const tauriClient = {
     stop: (sessionId: string) => invoke<void>('acp_stop', { sessionId }),
   },
 };
+
+function attachmentPayload(attachment: PromptAttachment) {
+  return {
+    path: attachment.path,
+    name: attachment.name,
+    size: attachment.size,
+    kind: attachment.kind,
+    mimeType: attachment.mimeType,
+  };
+}
 
 export function appError(error: unknown): { code: AppErrorCode | null; message: string } {
   if (typeof error === 'object' && error) {

@@ -4,12 +4,21 @@ export type DocumentReference = {
   name: string;
 };
 
+export type PromptAttachment = {
+  path: string;
+  name: string;
+  size: number;
+  kind: 'image' | 'pdf' | 'text' | 'file';
+  mimeType?: string | null;
+};
+
 export type SkribePromptOptions = {
   prompt: string;
   activeFilePath: string;
   workingFolder: string;
   selectedText?: string | null;
   documentReferences?: DocumentReference[] | null;
+  attachments?: PromptAttachment[] | null;
 };
 
 export function buildSkribePrompt({
@@ -18,9 +27,11 @@ export function buildSkribePrompt({
   workingFolder,
   selectedText,
   documentReferences,
+  attachments,
 }: SkribePromptOptions) {
   const selection = selectedText?.trim() ? selectedText : null;
   const documentReferenceContext = documentReferenceContextBlock(documentReferences);
+  const attachmentContext = attachmentContextBlock(attachments);
 
   if (selection) {
     return `${prompt}
@@ -29,6 +40,7 @@ You are Skribe's editing agent.
 Active markdown file: ${activeFilePath}
 Working folder: ${workingFolder}
 ${documentReferenceContext}
+${attachmentContext}
 
 Highlighted text selected by the user:
 <<<SKRIBE_SELECTED_TEXT
@@ -51,6 +63,7 @@ You are Skribe's editing agent.
 Active markdown file: ${activeFilePath}
 Working folder: ${workingFolder}
 ${documentReferenceContext}
+${attachmentContext}
 
 Use Claude Code's file tools when useful:
 - Read the active markdown file before editing it.
@@ -80,4 +93,25 @@ User-selected context documents:
 ${list}
 
 These documents were intentionally referenced by the user. Read them when useful for the request, but only edit the active markdown file unless the user explicitly asks otherwise.`;
+}
+
+function attachmentContextBlock(attachments?: PromptAttachment[] | null): string {
+  const selectedAttachments = attachments?.filter(
+    (attachment) => attachment.path.trim() && attachment.name.trim(),
+  );
+  if (!selectedAttachments?.length) return '';
+
+  const list = selectedAttachments
+    .map((attachment, index) => {
+      const mimeType = attachment.mimeType ? `\n   MIME type: ${attachment.mimeType}` : '';
+      return `${index + 1}. ${attachment.name}\n   Absolute path: ${attachment.path}\n   Kind: ${attachment.kind}\n   Size: ${attachment.size} bytes${mimeType}`;
+    })
+    .join('\n');
+
+  return `
+
+User-attached files:
+${list}
+
+These files were intentionally attached by the user. Read them when useful for the request, but do not modify attached files unless the user explicitly asks you to.`;
 }

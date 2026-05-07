@@ -32,6 +32,17 @@ export type DocumentReference = {
   name: string;
 };
 
+export type PromptAttachmentKind = 'image' | 'pdf' | 'text' | 'file';
+
+export type PromptAttachment = {
+  path: string;
+  name: string;
+  size: number;
+  kind: PromptAttachmentKind;
+  mimeType?: string | null;
+  previewDataUrl?: string | null;
+};
+
 export type AppSettings = {
   schemaVersion: 1;
   recentFolders: string[];
@@ -52,6 +63,7 @@ export type AppSettings = {
   };
   ai: {
     autoFocusInputOnFolderOpen: boolean;
+    dangerouslySkipPermissions: boolean;
     systemPrompt: string;
     projectWritingInstructions: Record<string, string>;
   };

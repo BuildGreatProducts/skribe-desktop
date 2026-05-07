@@ -52,4 +52,48 @@ describe('buildSkribePrompt', () => {
     expect(prompt).toContain('Read them when useful');
     expect(prompt).not.toContain('Referenced document contents');
   });
+
+  it('lists attached files by metadata without inlining contents', () => {
+    const prompt = buildSkribePrompt({
+      ...basePrompt,
+      attachments: [
+        {
+          name: 'reference.png',
+          path: '/tmp/project/reference.png',
+          size: 1536,
+          kind: 'image',
+          mimeType: 'image/png',
+        },
+      ],
+    });
+
+    expect(prompt).toContain('User-attached files');
+    expect(prompt).toContain('reference.png');
+    expect(prompt).toContain('/tmp/project/reference.png');
+    expect(prompt).toContain('Kind: image');
+    expect(prompt).toContain('Size: 1536 bytes');
+    expect(prompt).toContain('MIME type: image/png');
+    expect(prompt).toContain('Read them when useful');
+    expect(prompt).not.toContain('data:image/png');
+  });
+
+  it('keeps selection output rules when attachments are present', () => {
+    const prompt = buildSkribePrompt({
+      ...basePrompt,
+      selectedText: 'selected text',
+      attachments: [
+        {
+          name: 'notes.txt',
+          path: '/tmp/project/notes.txt',
+          size: 42,
+          kind: 'text',
+          mimeType: 'text/plain',
+        },
+      ],
+    });
+
+    expect(prompt).toContain('User-attached files');
+    expect(prompt).toContain('replacement Markdown for the highlighted text');
+    expect(prompt).not.toContain('complete final Markdown contents');
+  });
 });

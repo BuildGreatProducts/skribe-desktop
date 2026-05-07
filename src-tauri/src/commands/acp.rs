@@ -1,7 +1,7 @@
 use crate::{
     claude_path,
     error::AppError,
-    models::AcpStartResponse,
+    models::{AcpStartResponse, PromptAttachment},
     state::{AcpProcess, AcpState},
 };
 use serde::{Deserialize, Serialize};
@@ -118,6 +118,8 @@ pub fn acp_send_prompt(
     system_prompt: Option<String>,
     selected_text: Option<String>,
     document_references: Option<Vec<DocumentReference>>,
+    attachments: Option<Vec<PromptAttachment>>,
+    dangerously_skip_permissions: Option<bool>,
     state: State<AcpState>,
 ) -> Result<(), AppError> {
     let mut sessions = state
@@ -127,6 +129,19 @@ pub fn acp_send_prompt(
     let session = sessions
         .get_mut(&session_id)
         .ok_or_else(|| AppError::AcpSidecarFailed("ACP session not found".into()))?;
+    let attachments = attachments
+        .unwrap_or_default()
+        .into_iter()
+        .map(|attachment| {
+            json!({
+                "path": attachment.path,
+                "name": attachment.name,
+                "size": attachment.size,
+                "kind": attachment.kind,
+                "mimeType": attachment.mime_type
+            })
+        })
+        .collect::<Vec<_>>();
     session
         .write_json(&json!({
             "type": "prompt",
@@ -135,7 +150,9 @@ pub fn acp_send_prompt(
             "activeFilePath": active_file_path,
             "systemPrompt": system_prompt,
             "selectedText": selected_text,
-            "documentReferences": document_references.unwrap_or_default()
+            "documentReferences": document_references.unwrap_or_default(),
+            "attachments": attachments,
+            "dangerouslySkipPermissions": dangerously_skip_permissions.unwrap_or(false)
         }))
         .map_err(|error| AppError::AcpSidecarFailed(error.to_string()))
 }

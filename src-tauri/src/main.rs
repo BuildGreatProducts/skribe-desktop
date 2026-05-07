@@ -40,6 +40,7 @@ fn main() {
             fs::fs_create_file,
             fs::fs_rename_file,
             fs::fs_delete_file,
+            fs::fs_describe_attachments,
             fs::fs_watch_folder,
             fs::fs_unwatch_folder,
             settings_commands::settings_load,

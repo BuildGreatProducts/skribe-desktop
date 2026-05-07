@@ -331,6 +331,7 @@ export function Settings({ open, onClose }: SettingsProps) {
                     ai: {
                       ...current.ai,
                       autoFocusInputOnFolderOpen: false,
+                      dangerouslySkipPermissions: false,
                       systemPrompt: DEFAULT_GLOBAL_WRITING_INSTRUCTIONS,
                     },
                   }))
@@ -360,6 +361,20 @@ export function Settings({ open, onClose }: SettingsProps) {
                 }))
               }
             />
+            <Toggle
+              label="Dangerously skip Claude Code permissions"
+              checked={settings.ai.dangerouslySkipPermissions}
+              onChange={(checked) =>
+                void update((current) => ({
+                  ...current,
+                  ai: { ...current.ai, dangerouslySkipPermissions: checked },
+                }))
+              }
+            />
+            <p className="-mt-1 mb-2 text-xs leading-relaxed text-warning">
+              Bypasses Claude Code permission prompts for AI requests. Use only in
+              folders you trust.
+            </p>
             <label className="mt-3 block text-sm text-ink-soft">
               Global writing instructions
               <textarea

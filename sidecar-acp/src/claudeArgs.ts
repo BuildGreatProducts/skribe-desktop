@@ -1,4 +1,12 @@
-export function buildClaudeArgs(systemPrompt?: string | null) {
+type ClaudeArgsOptions = {
+  dangerouslySkipPermissions?: boolean;
+};
+
+export function buildClaudeArgs(
+  systemPrompt?: string | null,
+  additionalDirectories: string[] = [],
+  options: ClaudeArgsOptions = {},
+) {
   const args = [
     '--print',
     '--input-format',
@@ -7,12 +15,23 @@ export function buildClaudeArgs(systemPrompt?: string | null) {
     'stream-json',
     '--verbose',
     '--include-partial-messages',
-    '--permission-mode',
-    'acceptEdits',
+  ];
+
+  if (options.dangerouslySkipPermissions) {
+    args.push('--dangerously-skip-permissions');
+  } else {
+    args.push('--permission-mode', 'acceptEdits');
+  }
+
+  args.push(
     '--tools',
     'Read,Glob,Grep,LS',
     '--no-session-persistence',
-  ];
+  );
+
+  for (const directory of uniqueNonEmpty(additionalDirectories)) {
+    args.push('--add-dir', directory);
+  }
 
   const appendSystemPrompt = systemPrompt?.trim();
   if (appendSystemPrompt) {
@@ -20,4 +39,8 @@ export function buildClaudeArgs(systemPrompt?: string | null) {
   }
 
   return args;
+}
+
+function uniqueNonEmpty(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }

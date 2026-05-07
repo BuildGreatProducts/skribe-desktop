@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 function installMocks({
   folderPath = null,
   projectWritingInstructions = {},
+  dangerouslySkipPermissions = false,
 }: {
   folderPath?: string | null;
   projectWritingInstructions?: Record<string, string>;
+  dangerouslySkipPermissions?: boolean;
 } = {}) {
   const preflightState = {
     availability: { status: 'ready' },
@@ -35,6 +37,7 @@ function installMocks({
       ai: {
         systemPrompt: 'Keep the voice spare and precise.',
         projectWritingInstructions,
+        dangerouslySkipPermissions,
       },
     },
   };
@@ -101,6 +104,8 @@ describe('AI store listener setup', () => {
       'Keep the voice spare and precise.',
       undefined,
       [],
+      [],
+      false,
     );
   });
 
@@ -126,6 +131,27 @@ describe('AI store listener setup', () => {
       ].join('\n\n'),
       undefined,
       [],
+      [],
+      false,
+    );
+  });
+
+  it('submits the Claude Code permission bypass setting with each AI prompt', async () => {
+    const { tauriClient } = installMocks({ dangerouslySkipPermissions: true });
+    const { useAiStore } = await import('./aiStore');
+
+    await useAiStore.getState().startSession('/tmp/project');
+    await useAiStore.getState().submitPrompt('make it warmer', '/tmp/project/README.md');
+
+    expect(tauriClient.acp.sendPrompt).toHaveBeenCalledWith(
+      'session-1',
+      'make it warmer',
+      '/tmp/project/README.md',
+      'Keep the voice spare and precise.',
+      undefined,
+      [],
+      [],
+      true,
     );
   });
 
@@ -160,6 +186,51 @@ describe('AI store listener setup', () => {
           path: '/tmp/project/docs/Voice.md',
         },
       ],
+      [],
+      false,
+    );
+  });
+
+  it('submits prompt attachments with the AI prompt', async () => {
+    const { tauriClient } = installMocks();
+    const { useAiStore } = await import('./aiStore');
+
+    await useAiStore.getState().startSession('/tmp/project');
+    await useAiStore.getState().submitPrompt(
+      'use the screenshot',
+      '/tmp/project/README.md',
+      undefined,
+      [],
+      [
+        {
+          name: 'image.png',
+          path: '/tmp/project/image.png',
+          size: 1536,
+          kind: 'image',
+          mimeType: 'image/png',
+          previewDataUrl: 'data:image/png;base64,preview',
+        },
+      ],
+    );
+
+    expect(tauriClient.acp.sendPrompt).toHaveBeenCalledWith(
+      'session-1',
+      'use the screenshot',
+      '/tmp/project/README.md',
+      'Keep the voice spare and precise.',
+      undefined,
+      [],
+      [
+        {
+          name: 'image.png',
+          path: '/tmp/project/image.png',
+          size: 1536,
+          kind: 'image',
+          mimeType: 'image/png',
+          previewDataUrl: 'data:image/png;base64,preview',
+        },
+      ],
+      false,
     );
   });
 });
