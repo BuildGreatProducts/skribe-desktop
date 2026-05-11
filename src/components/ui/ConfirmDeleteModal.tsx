@@ -3,7 +3,8 @@ import { Modal } from './Modal';
 
 type ConfirmDeleteModalProps = {
   open: boolean;
-  fileName: string;
+  itemName: string;
+  itemKind?: 'file' | 'folder';
   loading?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -11,14 +12,15 @@ type ConfirmDeleteModalProps = {
 
 export function ConfirmDeleteModal({
   open,
-  fileName,
+  itemName,
+  itemKind = 'file',
   loading,
   onCancel,
   onConfirm,
 }: ConfirmDeleteModalProps) {
   return (
-    <Modal open={open} title="Delete file?" onClose={onCancel} className="max-w-[360px]">
-      <p className="mb-6 text-sm text-ink-soft">{fileName} will be moved to Trash.</p>
+    <Modal open={open} title={`Delete ${itemKind}?`} onClose={onCancel} className="max-w-[360px]">
+      <p className="mb-6 text-sm text-ink-soft">{itemName} will be moved to Trash.</p>
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onCancel}>
           Cancel

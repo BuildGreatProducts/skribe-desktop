@@ -26,6 +26,12 @@ export type MarkdownFile = {
   modifiedAt: number;
 };
 
+export type MarkdownFolder = {
+  path: string;
+  relativePath: string;
+  name: string;
+};
+
 export type DocumentReference = {
   path: string;
   relativePath: string;

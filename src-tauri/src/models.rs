@@ -18,6 +18,14 @@ pub struct MarkdownFile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MarkdownFolder {
+    pub path: String,
+    pub relative_path: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PromptAttachment {
     pub path: String,
     pub name: String,
