@@ -10,6 +10,24 @@ describe('buildClaudeArgs', () => {
     expect(args).not.toContain('--dangerously-skip-permissions');
   });
 
+  it('makes WebFetch available and auto-allowed without enabling web search', () => {
+    const args = buildClaudeArgs();
+    const toolsIndex = args.indexOf('--tools');
+    const allowedToolsIndex = args.indexOf('--allowedTools');
+
+    expect(toolsIndex).toBeGreaterThan(-1);
+    expect(args[toolsIndex + 1].split(',')).toEqual([
+      'Read',
+      'Glob',
+      'Grep',
+      'LS',
+      'WebFetch',
+    ]);
+    expect(args[toolsIndex + 1].split(',')).not.toContain('WebSearch');
+    expect(allowedToolsIndex).toBeGreaterThan(-1);
+    expect(args[allowedToolsIndex + 1]).toBe('WebFetch');
+  });
+
   it('does not append a system prompt for empty or whitespace settings text', () => {
     expect(buildClaudeArgs()).not.toContain('--append-system-prompt');
     expect(buildClaudeArgs('   \n\t  ')).not.toContain('--append-system-prompt');
@@ -46,5 +64,6 @@ describe('buildClaudeArgs', () => {
 
     expect(args).toContain('--dangerously-skip-permissions');
     expect(args).not.toContain('--permission-mode');
+    expect(args[args.indexOf('--allowedTools') + 1]).toBe('WebFetch');
   });
 });

@@ -25,7 +25,9 @@ export function buildClaudeArgs(
 
   args.push(
     '--tools',
-    'Read,Glob,Grep,LS',
+    'Read,Glob,Grep,LS,WebFetch',
+    '--allowedTools',
+    'WebFetch',
     '--no-session-persistence',
   );
 

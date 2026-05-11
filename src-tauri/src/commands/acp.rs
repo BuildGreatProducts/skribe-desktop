@@ -13,7 +13,7 @@ use std::{
     process::{Command, Stdio},
     thread,
 };
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -87,7 +87,7 @@ pub fn acp_start(
         .take()
         .ok_or_else(|| AppError::AcpSidecarFailed("Could not open sidecar stderr".into()))?;
 
-    spawn_stdout_relay(app.clone(), stdout);
+    spawn_stdout_relay(app.clone(), session_id.clone(), stdout);
     spawn_stderr_drain(stderr);
 
     let mut process = AcpProcess { child, stdin };
@@ -207,7 +207,7 @@ pub fn acp_stop(session_id: String, state: State<AcpState>) -> Result<(), AppErr
     Ok(())
 }
 
-fn spawn_stdout_relay(app: AppHandle, stdout: std::process::ChildStdout) {
+fn spawn_stdout_relay(app: AppHandle, session_id: String, stdout: std::process::ChildStdout) {
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines().map_while(Result::ok) {
@@ -229,7 +229,25 @@ fn spawn_stdout_relay(app: AppHandle, stdout: std::process::ChildStdout) {
                 }
             }
         }
+        mark_session_crashed(&app, &session_id);
     });
+}
+
+fn mark_session_crashed(app: &AppHandle, session_id: &str) {
+    let removed = app
+        .state::<AcpState>()
+        .sessions
+        .lock()
+        .ok()
+        .and_then(|mut sessions| sessions.remove(session_id));
+
+    if let Some(mut process) = removed {
+        let _ = process.child.kill();
+        let _ = app.emit(
+            "acp:status",
+            json!({ "sessionId": session_id, "status": "crashed" }),
+        );
+    }
 }
 
 fn spawn_stderr_drain(stderr: std::process::ChildStderr) {

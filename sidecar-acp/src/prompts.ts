@@ -50,6 +50,7 @@ SKRIBE_SELECTED_TEXT
 Use Claude Code's file tools when useful:
 - Read the active markdown file before editing it.
 - You may inspect sibling markdown files for tone and context.
+- You may use WebFetch to read URLs explicitly provided by the user.
 - Do not use file modification tools. Skribe will apply your final Markdown to the selected text only.
 - Preserve surrounding document context. Do not rewrite unrelated text.
 - If the user asks to create another file, describe the requested file content in your final response instead of writing it.
@@ -68,6 +69,7 @@ ${attachmentContext}
 Use Claude Code's file tools when useful:
 - Read the active markdown file before editing it.
 - You may inspect sibling markdown files for tone and context.
+- You may use WebFetch to read URLs explicitly provided by the user.
 - Do not use file modification tools. Skribe will apply your final Markdown to the active file.
 - If the user asks to create another file, describe the requested file content in your final response instead of writing it.
 

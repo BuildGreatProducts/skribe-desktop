@@ -109,6 +109,22 @@ describe('AI store listener setup', () => {
     );
   });
 
+  it('restarts the sidecar and retries once when a prompt hits a broken pipe', async () => {
+    const { tauriClient } = installMocks({ folderPath: '/tmp/project' });
+    tauriClient.acp.sendPrompt
+      .mockRejectedValueOnce(new Error('Broken pipe (os error 32)'))
+      .mockResolvedValueOnce(undefined);
+    const { useAiStore } = await import('./aiStore');
+
+    await useAiStore.getState().startSession('/tmp/project');
+    await useAiStore.getState().submitPrompt('make it warmer', '/tmp/project/README.md');
+
+    expect(tauriClient.acp.stop).toHaveBeenCalledWith('session-1');
+    expect(tauriClient.acp.start).toHaveBeenCalledTimes(2);
+    expect(tauriClient.acp.sendPrompt).toHaveBeenCalledTimes(2);
+    expect(useAiStore.getState().status).toBe('streaming');
+  });
+
   it('submits project writing instructions alongside global writing instructions', async () => {
     const { tauriClient } = installMocks({
       folderPath: '/tmp/project',

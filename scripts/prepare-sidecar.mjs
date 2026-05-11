@@ -15,13 +15,10 @@ const script = `#!/usr/bin/env bash
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-
-if [ -f "$APP_ROOT/sidecar-acp/dist/index.js" ]; then
-  exec node "$APP_ROOT/sidecar-acp/dist/index.js" "$@"
-fi
 
 for INDEX_JS in \\
+  "$SCRIPT_DIR/../../sidecar-acp/dist/index.js" \\
+  "$SCRIPT_DIR/../../../sidecar-acp/dist/index.js" \\
   "$SCRIPT_DIR/../Resources/sidecar-acp/dist/index.js" \\
   "$SCRIPT_DIR/../Resources/_up_/sidecar-acp/dist/index.js"
 do

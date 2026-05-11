@@ -16,6 +16,7 @@ describe('buildSkribePrompt', () => {
     expect(prompt).toContain('Do not add an outer code fence');
     expect(prompt).toContain('file trees');
     expect(prompt).toContain('text fence');
+    expect(prompt).toContain('WebFetch to read URLs explicitly provided by the user');
     expect(prompt).not.toContain('SKRIBE_SELECTED_TEXT');
   });
 
@@ -30,6 +31,7 @@ describe('buildSkribePrompt', () => {
     expect(prompt).toContain('replacement Markdown for the highlighted text');
     expect(prompt).toContain('Do not add an outer code fence');
     expect(prompt).toContain('file trees');
+    expect(prompt).toContain('WebFetch to read URLs explicitly provided by the user');
     expect(prompt).not.toContain('complete final Markdown contents');
   });
 
