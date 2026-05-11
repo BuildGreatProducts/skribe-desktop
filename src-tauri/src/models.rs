@@ -78,7 +78,6 @@ impl Default for WidgetSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiSettings {
-    pub auto_focus_input_on_folder_open: bool,
     #[serde(default)]
     pub dangerously_skip_permissions: bool,
     #[serde(default = "default_system_prompt")]
@@ -130,7 +129,6 @@ impl Default for AppSettings {
             },
             widgets: WidgetSettings::default(),
             ai: AiSettings {
-                auto_focus_input_on_folder_open: false,
                 dangerously_skip_permissions: false,
                 system_prompt: default_system_prompt(),
                 project_writing_instructions: BTreeMap::new(),

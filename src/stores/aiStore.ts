@@ -201,7 +201,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       const setupStatus = usePreflightStore.getState().availability.status;
       if (setupStatus !== 'ready') return;
       if (get().sessionId) return;
-      set({ status: 'submitting', error: null, streamPreview: hiddenStreamPreview });
+      set({ error: null, streamPreview: hiddenStreamPreview });
       try {
         const { sessionId } = await tauriClient.acp.start(folderPath);
         set({ sessionId, status: 'idle', partialResponse: '' });

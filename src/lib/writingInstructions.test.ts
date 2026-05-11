@@ -26,7 +26,6 @@ const baseSettings: AppSettings = {
     readingLevel: true,
   },
   ai: {
-    autoFocusInputOnFolderOpen: false,
     dangerouslySkipPermissions: false,
     systemPrompt: DEFAULT_GLOBAL_WRITING_INSTRUCTIONS,
     projectWritingInstructions: {},

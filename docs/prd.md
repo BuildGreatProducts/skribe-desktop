@@ -216,7 +216,9 @@ fileTreeWidth: number;                     // 200–360 (default 240)
 showStatusLine: boolean;                   // Default true
 };
 ai: {
-autoFocusInputOnFolderOpen: boolean;       // Default false
+dangerouslySkipPermissions: boolean;       // Default false
+systemPrompt: string;                      // Default global writing instructions
+projectWritingInstructions: Record<string, string>; // Per-folder instructions
 };
 preflight: {
 claudeCodeDetected: boolean;               // Cached result

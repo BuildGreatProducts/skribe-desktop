@@ -254,6 +254,7 @@ describe('AIInputBar selection collapse behavior', () => {
       },
       pendingClarification: null,
       error: null,
+      promptFilePath: null,
       promptDocumentReferences: [],
       promptAttachments: [],
       startSession: vi.fn(async () => undefined),
@@ -265,6 +266,54 @@ describe('AIInputBar selection collapse behavior', () => {
     tauriMocks.open.mockResolvedValue(null);
     tauriMocks.describeAttachments.mockResolvedValue([]);
     tauriMocks.onDragDropEvent.mockResolvedValue(() => undefined);
+  });
+
+  it('starts closed when a document is already open', () => {
+    useEditorStore.setState({ filePath, highlightedSelection: null });
+    render(<AIInputBar />);
+
+    expect(
+      screen.getByRole('button', { name: 'Open AI prompt' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: 'AI prompt' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('stays closed while the background Claude session starts', () => {
+    useEditorStore.setState({ filePath, highlightedSelection: null });
+    useAiStore.setState({ status: 'submitting', promptFilePath: null });
+    render(<AIInputBar />);
+
+    expect(
+      screen.getByRole('button', { name: 'Open AI prompt' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: 'AI prompt' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('closes the prompt immediately when a document opens', () => {
+    useEditorStore.setState({ filePath, highlightedSelection: null });
+    render(<AIInputBar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open AI prompt' }));
+
+    expect(promptEditor()).toBeInTheDocument();
+
+    act(() => {
+      useEditorStore.setState({
+        filePath: '/tmp/project/docs/Brief.md',
+        highlightedSelection: null,
+      });
+    });
+
+    expect(
+      screen.getByRole('button', { name: 'Open AI prompt' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: 'AI prompt' }),
+    ).not.toBeInTheDocument();
   });
 
   it('clears the selected text and collapses when clicking outside a selection-opened prompt', () => {
@@ -391,6 +440,26 @@ describe('AIInputBar selection collapse behavior', () => {
       [],
       [],
     );
+  });
+
+  it('normalizes the browser empty block after deleting all prompt text', () => {
+    useEditorStore.setState({ filePath, highlightedSelection: null });
+    render(<AIInputBar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open AI prompt' }));
+    const editor = setPromptText('Draft this');
+    editor.focus();
+    editor.innerHTML = '<div><br></div>';
+
+    fireEvent.input(editor);
+
+    const normalizedEditor = promptEditor();
+    expect(normalizedEditor).toHaveFocus();
+    expect(normalizedEditor.querySelector('div')).toBeNull();
+    expect(
+      normalizedEditor.querySelectorAll('[data-text-segment="true"]'),
+    ).toHaveLength(1);
+    expect(normalizedEditor).toHaveTextContent('');
   });
 
   it('adds picker attachments as compact chips and ignores duplicate paths', async () => {

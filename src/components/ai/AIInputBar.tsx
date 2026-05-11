@@ -87,11 +87,13 @@ export function AIInputBar() {
   const promptSurfaceRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const pendingCaretSegmentId = useRef<string | null>(null);
+  const pendingEditorFocus = useRef(false);
   const pendingPromptFocus = useRef(false);
   const attachmentPickerActive = useRef(false);
   const folderPath = useFolderStore((state) => state.path);
   const files = useFolderStore((state) => state.files);
   const filePath = useEditorStore((state) => state.filePath);
+  const previousFilePath = useRef<string | null>(filePath);
   const highlightedSelection = useEditorStore(
     (state) => state.highlightedSelection,
   );
@@ -99,6 +101,7 @@ export function AIInputBar() {
     (state) => state.clearHighlightedSelection,
   );
   const status = useAiStore((state) => state.status);
+  const promptFilePath = useAiStore((state) => state.promptFilePath);
   const streamPreview = useAiStore((state) => state.streamPreview);
   const startSession = useAiStore((state) => state.startSession);
   const submitPrompt = useAiStore((state) => state.submitPrompt);
@@ -167,7 +170,13 @@ export function AIInputBar() {
 
   useLayoutEffect(() => {
     const segmentId = pendingCaretSegmentId.current;
-    if (!segmentId || !editorRef.current) return;
+    if (!editorRef.current) return;
+    if (pendingEditorFocus.current) {
+      pendingEditorFocus.current = false;
+      editorRef.current.focus();
+      placeCaretAtEnd(editorRef.current);
+    }
+    if (!segmentId) return;
     pendingCaretSegmentId.current = null;
     const segment = editorRef.current.querySelector<HTMLElement>(
       `[data-segment-id="${segmentId}"]`,
@@ -185,9 +194,9 @@ export function AIInputBar() {
     status === 'submitting' ||
     status === 'awaiting_clarification';
   const attachmentDisabled = disabled || status === 'streaming';
-  const busy = ['submitting', 'streaming', 'awaiting_clarification'].includes(
-    status,
-  );
+  const busy =
+    Boolean(promptFilePath) &&
+    ['submitting', 'streaming', 'awaiting_clarification'].includes(status);
   const selection =
     highlightedSelection && highlightedSelection.filePath === filePath
       ? highlightedSelection
@@ -213,12 +222,14 @@ export function AIInputBar() {
   }, [mention, mentionableDocuments]);
   const mentionMenuOpen =
     Boolean(mention) && filteredMentionDocuments.length > 0;
-  const isExpanded =
-    expanded ||
+  const hasPromptContent =
     Boolean(textValue.trim()) ||
     Boolean(selection) ||
     documentReferences.length > 0 ||
-    attachments.length > 0 ||
+    attachments.length > 0;
+  const isExpanded =
+    expanded ||
+    hasPromptContent ||
     busy ||
     streamPreview.visible;
   const [promptVisible, setPromptVisible] = useState(isExpanded);
@@ -378,6 +389,31 @@ export function AIInputBar() {
     if (editorRef.current) placeCaretAtEnd(editorRef.current);
   }, [disabled, promptVisible, status]);
 
+  useLayoutEffect(() => {
+    if (previousFilePath.current === filePath) return;
+    previousFilePath.current = filePath;
+    if (!filePath || busy || streamPreview.visible) return;
+
+    const nextTextSegment = createTextPromptSegment();
+    setSegments([nextTextSegment]);
+    setLiveSegments([nextTextSegment]);
+    setEditorRevision((revision) => revision + 1);
+    setAttachments([]);
+    setMention(null);
+    clearHighlightedSelection();
+    pendingPromptFocus.current = false;
+    setExpanded(false);
+    setPromptVisible(false);
+    setPromptIconsVisible(false);
+    setShellExpanded(false);
+    editorRef.current?.blur();
+  }, [
+    busy,
+    clearHighlightedSelection,
+    filePath,
+    streamPreview.visible,
+  ]);
+
   useEffect(() => {
     setActiveMentionIndex(0);
   }, [documentReferences.length, files.length, mention?.query]);
@@ -389,10 +425,11 @@ export function AIInputBar() {
 
   useEffect(() => {
     if (isExpanded) {
-      setPromptVisible(true);
-      setShellExpanded(true);
+      if (!promptVisible) setPromptVisible(true);
+      if (!shellExpanded) setShellExpanded(true);
       return;
     }
+    if (!promptVisible) return;
 
     const timeout = window.setTimeout(() => {
       const currentSegments = editorRef.current
@@ -405,10 +442,11 @@ export function AIInputBar() {
     }, PROMPT_ICON_HIDE_MS + COLLAPSE_ANIMATION_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [isExpanded]);
+  }, [isExpanded, promptVisible, shellExpanded]);
 
   useEffect(() => {
     if (isExpanded) {
+      if (promptIconsVisible) return;
       setPromptIconsVisible(false);
       const timeout = window.setTimeout(
         () => setPromptIconsVisible(true),
@@ -416,6 +454,7 @@ export function AIInputBar() {
       );
       return () => window.clearTimeout(timeout);
     }
+    if (!promptIconsVisible && !shellExpanded) return;
 
     const timeout = window.setTimeout(
       () => setShellExpanded(false),
@@ -423,7 +462,7 @@ export function AIInputBar() {
     );
     setPromptIconsVisible(false);
     return () => window.clearTimeout(timeout);
-  }, [isExpanded]);
+  }, [isExpanded, promptIconsVisible, shellExpanded]);
 
   async function submit() {
     const currentSegments = readEditorSegments();
@@ -460,6 +499,18 @@ export function AIInputBar() {
     const cursor = editorRef.current
       ? textOffsetFromSelection(editorRef.current)
       : null;
+    if (
+      editorRef.current &&
+      currentText.length === 0 &&
+      documentReferencesFromSegments(currentSegments).length === 0 &&
+      !hasSingleEmptyTextSegmentElement(editorRef.current)
+    ) {
+      const nextTextSegment = createTextPromptSegment();
+      pendingEditorFocus.current = editorRef.current === document.activeElement;
+      commitPromptSegments([nextTextSegment]);
+      setMention(null);
+      return;
+    }
     // Keep ordinary typing browser-owned; React only commits structure when chips change.
     setLiveSegments(currentSegments);
     setMention(findActiveMention(currentText, cursor ?? currentText.length));
@@ -637,7 +688,7 @@ export function AIInputBar() {
             <div
               ref={promptSurfaceRef}
               className={clsx(
-                'relative z-10 flex min-h-12 items-center gap-1 overflow-hidden rounded-[1.5rem] bg-white p-1 pr-12 shadow-[0_10px_30px_rgb(42_42_42_/_12%)] ring-1 transition',
+                'relative z-10 flex min-h-12 items-center gap-0.5 overflow-hidden rounded-[1.5rem] bg-white p-1 pr-12 shadow-[0_10px_30px_rgb(42_42_42_/_12%)] ring-1 transition',
                 promptIconsVisible ? 'flex-wrap' : 'h-12 flex-nowrap',
                 dragActive
                   ? 'bg-highlight/70 ring-accent'
@@ -710,7 +761,7 @@ export function AIInputBar() {
                 suppressContentEditableWarning
                 autoCapitalize="off"
                 spellCheck
-                className="min-h-10 min-w-[10rem] flex-1 whitespace-pre-wrap break-words rounded-[1.25rem] px-2 py-[0.45rem] text-base leading-normal text-ink focus:outline-none empty:before:text-chrome-text-soft disabled:opacity-50"
+                className="min-h-10 min-w-[10rem] flex-1 whitespace-pre-wrap break-words rounded-[1.25rem] py-[0.45rem] pl-1 pr-2 text-base leading-normal text-ink focus:outline-none empty:before:text-chrome-text-soft disabled:opacity-50"
                 onInput={syncEditorState}
                 onClick={syncEditorState}
                 onFocus={syncEditorState}
@@ -1047,6 +1098,16 @@ function parseEditorSegments(editor: HTMLElement): PromptSegment[] {
     appendNodeAsSegment(segments, node);
   }
   return normalizePromptSegments(segments);
+}
+
+function hasSingleEmptyTextSegmentElement(editor: HTMLElement): boolean {
+  if (editor.childNodes.length !== 1) return false;
+  const onlyChild = editor.firstChild;
+  return (
+    onlyChild instanceof HTMLElement &&
+    onlyChild.dataset.textSegment === 'true' &&
+    (onlyChild.textContent ?? '') === ''
+  );
 }
 
 function appendNodeAsSegment(segments: PromptSegment[], node: Node) {

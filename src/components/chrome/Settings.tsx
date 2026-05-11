@@ -330,7 +330,6 @@ export function Settings({ open, onClose }: SettingsProps) {
                     ...current,
                     ai: {
                       ...current.ai,
-                      autoFocusInputOnFolderOpen: false,
                       dangerouslySkipPermissions: false,
                       systemPrompt: DEFAULT_GLOBAL_WRITING_INSTRUCTIONS,
                     },
@@ -350,16 +349,6 @@ export function Settings({ open, onClose }: SettingsProps) {
                 void copyClaudeLoginCommand().catch(() => undefined)
               }
               onRecheck={() => void runPreflight({ force: true })}
-            />
-            <Toggle
-              label="Auto-focus AI input after opening a folder"
-              checked={settings.ai.autoFocusInputOnFolderOpen}
-              onChange={(checked) =>
-                void update((current) => ({
-                  ...current,
-                  ai: { ...current.ai, autoFocusInputOnFolderOpen: checked },
-                }))
-              }
             />
             <Toggle
               label="Dangerously skip Claude Code permissions"

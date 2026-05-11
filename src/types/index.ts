@@ -68,7 +68,6 @@ export type AppSettings = {
     readingLevel: boolean;
   };
   ai: {
-    autoFocusInputOnFolderOpen: boolean;
     dangerouslySkipPermissions: boolean;
     systemPrompt: string;
     projectWritingInstructions: Record<string, string>;

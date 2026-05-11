@@ -94,13 +94,12 @@ export function AppShell({
           />
         </div>
         <div className="flex h-full">
-          <aside
-            className="min-h-0 shrink-0 overflow-hidden border-r border-hairline bg-chrome-bg transition-[width] duration-200 ease-in-out"
-            style={{ width: sidebarWidth }}
-            aria-label="File navigation"
-            aria-hidden={!hasSidebar}
-          >
-            {hasSidebar ? (
+          {hasSidebar ? (
+            <aside
+              className="min-h-0 shrink-0 overflow-hidden border-r border-hairline bg-chrome-bg transition-[width] duration-200 ease-in-out"
+              style={{ width: sidebarWidth }}
+              aria-label="File navigation"
+            >
               <div
                 className="flex h-full flex-col transition-opacity duration-200 ease-in-out"
                 style={{ width: expandedSidebarWidth, opacity: sidebarCollapsed ? 0 : 1 }}
@@ -125,10 +124,8 @@ export function AppShell({
                 </div>
                 <div className="min-h-0 flex-1">{sidebar}</div>
               </div>
-            ) : (
-              null
-            )}
-          </aside>
+            </aside>
+          ) : null}
           <main className="min-w-0 flex-1 bg-paper">{children}</main>
         </div>
       </div>
