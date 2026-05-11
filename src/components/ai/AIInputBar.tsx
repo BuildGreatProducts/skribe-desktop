@@ -637,11 +637,11 @@ export function AIInputBar() {
             <div
               ref={promptSurfaceRef}
               className={clsx(
-                'relative z-10 flex min-h-12 items-center gap-1 overflow-hidden rounded-[1.5rem] border bg-white p-1 pr-12 shadow-[0_10px_30px_rgb(42_42_42_/_12%)] transition',
+                'relative z-10 flex min-h-12 items-center gap-1 overflow-hidden rounded-[1.5rem] bg-white p-1 pr-12 shadow-[0_10px_30px_rgb(42_42_42_/_12%)] ring-1 transition',
                 promptIconsVisible ? 'flex-wrap' : 'h-12 flex-nowrap',
                 dragActive
-                  ? 'border-accent bg-highlight/70'
-                  : 'border-hairline',
+                  ? 'bg-highlight/70 ring-accent'
+                  : 'ring-hairline',
               )}
               onClick={() => {
                 setExpanded(true);

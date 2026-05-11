@@ -328,6 +328,8 @@ describe('AIInputBar selection collapse behavior', () => {
     expect(shell).toHaveClass('max-w-[44rem]');
     expect(surface).toHaveClass('h-12');
     expect(surface).toHaveClass('flex-nowrap');
+    expect(surface).toHaveClass('ring-1');
+    expect(surface).not.toHaveClass('border');
     expect(
       screen.getByRole('button', { name: 'Attach files' }),
     ).toBeInTheDocument();
