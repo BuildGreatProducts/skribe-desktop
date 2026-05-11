@@ -6,6 +6,7 @@ import { buildWritingInstructionsSystemPrompt } from '../lib/writingInstructions
 import { useEditorStore } from './editorStore';
 import { useFolderStore } from './folderStore';
 import { usePreflightStore } from './preflightStore';
+import { dangerouslySkipPermissionsForFolder } from './sessionSettingsStore';
 import { useSettingsStore } from './settingsStore';
 import type {
   AiError,
@@ -269,9 +270,10 @@ export const useAiStore = create<AiState>((set, get) => ({
     });
     const sendWithSession = async (targetSessionId: string) => {
       const settings = useSettingsStore.getState().settings;
+      const folderPath = useFolderStore.getState().path;
       const systemPrompt = buildWritingInstructionsSystemPrompt(
         settings,
-        useFolderStore.getState().path,
+        folderPath,
       );
       await tauriClient.acp.sendPrompt(
         targetSessionId,
@@ -281,7 +283,7 @@ export const useAiStore = create<AiState>((set, get) => ({
         selectedTextForPromptTarget(activeFilePath, promptTarget),
         documentReferences,
         attachments,
-        settings.ai.dangerouslySkipPermissions,
+        dangerouslySkipPermissionsForFolder(folderPath),
       );
     };
 

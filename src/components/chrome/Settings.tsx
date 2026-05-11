@@ -13,7 +13,9 @@ import {
   copyClaudeLoginCommand,
 } from '../../lib/claudeSetup';
 import { DEFAULT_GLOBAL_WRITING_INSTRUCTIONS } from '../../lib/writingInstructions';
+import { useFolderStore } from '../../stores/folderStore';
 import { usePreflightStore } from '../../stores/preflightStore';
+import { useSessionSettingsStore } from '../../stores/sessionSettingsStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { Button, Modal, Select, Toggle } from '../ui';
 
@@ -35,8 +37,15 @@ export function Settings({ open, onClose }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('editor');
   const settings = useSettingsStore((state) => state.settings);
   const update = useSettingsStore((state) => state.update);
+  const folderPath = useFolderStore((state) => state.path);
   const availability = usePreflightStore((state) => state.availability);
   const runPreflight = usePreflightStore((state) => state.run);
+  const dangerouslySkipPermissions = useSessionSettingsStore((state) =>
+    folderPath ? state.dangerouslySkipPermissionsByFolder[folderPath] === true : false,
+  );
+  const setDangerouslySkipPermissions = useSessionSettingsStore(
+    (state) => state.setDangerouslySkipPermissions,
+  );
 
   const moveTabFocus = (nextTab: SettingsTab) => {
     setActiveTab(nextTab);
@@ -330,10 +339,11 @@ export function Settings({ open, onClose }: SettingsProps) {
                     ...current,
                     ai: {
                       ...current.ai,
-                      dangerouslySkipPermissions: false,
                       systemPrompt: DEFAULT_GLOBAL_WRITING_INSTRUCTIONS,
                     },
-                  }))
+                  })).then(() => {
+                    if (folderPath) setDangerouslySkipPermissions(folderPath, false);
+                  })
                 }
               >
                 Reset
@@ -352,13 +362,10 @@ export function Settings({ open, onClose }: SettingsProps) {
             />
             <Toggle
               label="Dangerously skip Claude Code permissions"
-              checked={settings.ai.dangerouslySkipPermissions}
-              onChange={(checked) =>
-                void update((current) => ({
-                  ...current,
-                  ai: { ...current.ai, dangerouslySkipPermissions: checked },
-                }))
-              }
+              checked={dangerouslySkipPermissions}
+              onChange={(checked) => {
+                if (folderPath) setDangerouslySkipPermissions(folderPath, checked);
+              }}
             />
             <p className="-mt-1 mb-2 text-xs leading-relaxed text-warning">
               Bypasses Claude Code permission prompts for AI requests. Use only in

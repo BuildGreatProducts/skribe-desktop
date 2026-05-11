@@ -16,9 +16,22 @@ use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_dialog::DialogExt;
 use walkdir::{DirEntry, WalkDir};
 
-const IGNORED_DIRS: &[&str] = &[".git", "node_modules", "dist", "build", "target"];
+const IGNORED_DIRS: &[&str] = &[
+    ".git",
+    ".idea",
+    ".next",
+    ".nuxt",
+    ".vscode",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "vendor",
+];
 const MAX_FILE_SIZE: u64 = 5 * 1024 * 1024;
 const MAX_ATTACHMENT_PREVIEW_BYTES: u64 = 512 * 1024;
+const MAX_PATH_NAME_LENGTH: usize = 255;
 
 #[tauri::command]
 pub async fn fs_pick_folder(app: AppHandle) -> Result<Option<String>, AppError> {
@@ -238,13 +251,18 @@ pub fn fs_delete_folder(
 }
 
 #[tauri::command]
-pub fn fs_describe_attachments(paths: Vec<String>) -> Result<Vec<PromptAttachment>, AppError> {
+pub fn fs_describe_attachments(
+    paths: Vec<String>,
+    watcher_state: State<WatcherState>,
+) -> Result<Vec<PromptAttachment>, AppError> {
+    let folder = open_folder(&watcher_state)?;
     let mut attachments = Vec::new();
 
     for path in paths {
         let Ok(canonical) = fs::canonicalize(&path) else {
             continue;
         };
+        ensure_inside(&folder, &canonical)?;
         let Ok(metadata) = fs::metadata(&canonical) else {
             continue;
         };
@@ -454,7 +472,9 @@ fn should_descend_into(entry: &DirEntry) -> bool {
         if name.starts_with('.') {
             return false;
         }
-        return !IGNORED_DIRS.contains(&name.as_ref());
+        return !IGNORED_DIRS
+            .iter()
+            .any(|ignored| name.eq_ignore_ascii_case(ignored));
     }
     true
 }
@@ -535,8 +555,7 @@ fn is_previewable_image_mime(mime_type: &str) -> bool {
 }
 
 fn base64_encode(bytes: &[u8]) -> String {
-    const TABLE: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut encoded = String::with_capacity(bytes.len().div_ceil(3) * 4);
 
     for chunk in bytes.chunks(3) {
@@ -612,13 +631,7 @@ fn markdown_folder_from_path(folder: &Path, path: &Path) -> Result<MarkdownFolde
 
 fn sanitize_file_name(file_name: &str) -> Result<String, AppError> {
     let trimmed = file_name.trim();
-    if trimmed.is_empty()
-        || trimmed.contains('/')
-        || trimmed.contains('\\')
-        || trimmed.contains(':')
-        || trimmed == "."
-        || trimmed == ".."
-    {
+    if !is_valid_path_name(trimmed) {
         return Err(AppError::FsInvalidPath(
             "Use a valid markdown filename".into(),
         ));
@@ -627,25 +640,51 @@ fn sanitize_file_name(file_name: &str) -> Result<String, AppError> {
     if !name.ends_with(".md") && !name.ends_with(".markdown") {
         name.push_str(".md");
     }
+    if name.len() > MAX_PATH_NAME_LENGTH {
+        return Err(AppError::FsInvalidPath(
+            "Use a valid markdown filename".into(),
+        ));
+    }
     Ok(name)
 }
 
 fn sanitize_folder_name(folder_name: &str) -> Result<String, AppError> {
     let trimmed = folder_name.trim();
-    if trimmed.is_empty()
-        || trimmed.contains('/')
-        || trimmed.contains('\\')
-        || trimmed.contains(':')
-        || trimmed == "."
-        || trimmed == ".."
-        || trimmed.starts_with('.')
-        || IGNORED_DIRS.contains(&trimmed)
-    {
-        return Err(AppError::FsInvalidPath(
-            "Use a valid folder name".into(),
-        ));
+    let ignored = IGNORED_DIRS
+        .iter()
+        .any(|ignored| trimmed.eq_ignore_ascii_case(ignored));
+    if !is_valid_path_name(trimmed) || trimmed.starts_with('.') || ignored {
+        return Err(AppError::FsInvalidPath("Use a valid folder name".into()));
     }
     Ok(trimmed.to_string())
+}
+
+fn is_valid_path_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= MAX_PATH_NAME_LENGTH
+        && !name.contains('/')
+        && !name.contains('\\')
+        && !name.contains(':')
+        && !name.ends_with(' ')
+        && !name.ends_with('.')
+        && name != "."
+        && name != ".."
+        && !is_windows_reserved_base_name(name)
+}
+
+fn is_windows_reserved_base_name(name: &str) -> bool {
+    let base = name.split('.').next().unwrap_or_default();
+    let upper = base.to_ascii_uppercase();
+    matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || reserved_numbered_device(&upper, "COM")
+        || reserved_numbered_device(&upper, "LPT")
+}
+
+fn reserved_numbered_device(name: &str, prefix: &str) -> bool {
+    let Some(suffix) = name.strip_prefix(prefix) else {
+        return false;
+    };
+    suffix.len() == 1 && matches!(suffix.as_bytes()[0], b'1'..=b'9')
 }
 
 fn dedupe_path(folder: &Path, file_name: &str) -> PathBuf {
@@ -768,6 +807,9 @@ mod tests {
         assert_eq!(safe_name, "Untitled.md");
         assert_eq!(next_path, root.join("Untitled 3.md"));
         assert!(sanitize_file_name("../notes.md").is_err());
+        assert!(sanitize_file_name("CON").is_err());
+        assert!(sanitize_file_name("notes.").is_err());
+        assert!(sanitize_file_name(&"a".repeat(256)).is_err());
 
         let _ = fs::remove_dir_all(root);
     }
@@ -780,7 +822,10 @@ mod tests {
         fs::create_dir_all(root.join("drafts")).unwrap();
         let root = fs::canonicalize(root).unwrap();
 
-        assert_eq!(create_file_parent_folder(&root, None).unwrap(), root.clone());
+        assert_eq!(
+            create_file_parent_folder(&root, None).unwrap(),
+            root.clone()
+        );
         assert_eq!(
             create_file_parent_folder(
                 &root,
@@ -808,6 +853,8 @@ mod tests {
         assert_eq!(next_path, root.join("Untitled Folder 3"));
         assert!(sanitize_folder_name("../notes").is_err());
         assert!(sanitize_folder_name(".drafts").is_err());
+        assert!(sanitize_folder_name("vendor").is_err());
+        assert!(sanitize_folder_name("LPT1").is_err());
 
         let _ = fs::remove_dir_all(root);
     }

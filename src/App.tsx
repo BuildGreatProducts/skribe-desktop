@@ -314,27 +314,61 @@ export default function App() {
 }
 
 function isValidFileName(fileName: string): boolean {
-  return (
-    fileName.length > 0 &&
-    !fileName.includes('/') &&
-    !fileName.includes('\\') &&
-    !fileName.includes(':') &&
-    fileName !== '.' &&
-    fileName !== '..'
-  );
+  const finalName = markdownFileName(fileName);
+  return isValidPathName(fileName) && finalName.length <= MAX_PATH_NAME_LENGTH;
 }
 
 function isValidFolderName(folderName: string): boolean {
   return (
-    folderName.length > 0 &&
-    !folderName.includes('/') &&
-    !folderName.includes('\\') &&
-    !folderName.includes(':') &&
-    folderName !== '.' &&
-    folderName !== '..' &&
+    isValidPathName(folderName) &&
     !folderName.startsWith('.') &&
-    !IGNORED_FOLDER_NAMES.has(folderName)
+    !IGNORED_FOLDER_NAMES.has(folderName.toLowerCase())
   );
 }
 
-const IGNORED_FOLDER_NAMES = new Set(['.git', 'node_modules', 'dist', 'build', 'target']);
+// Keep these frontend checks aligned with the Tauri filename sanitizers.
+function isValidPathName(name: string): boolean {
+  return (
+    name.length > 0 &&
+    name.length <= MAX_PATH_NAME_LENGTH &&
+    !name.includes('/') &&
+    !name.includes('\\') &&
+    !name.includes(':') &&
+    !name.endsWith(' ') &&
+    !name.endsWith('.') &&
+    name !== '.' &&
+    name !== '..' &&
+    !WINDOWS_RESERVED_BASE_NAMES.has(name.split('.')[0].toUpperCase())
+  );
+}
+
+function markdownFileName(fileName: string): string {
+  return fileName.endsWith('.md') || fileName.endsWith('.markdown')
+    ? fileName
+    : `${fileName}.md`;
+}
+
+const MAX_PATH_NAME_LENGTH = 255;
+
+const WINDOWS_RESERVED_BASE_NAMES = new Set([
+  'CON',
+  'PRN',
+  'AUX',
+  'NUL',
+  ...Array.from({ length: 9 }, (_, index) => `COM${index + 1}`),
+  ...Array.from({ length: 9 }, (_, index) => `LPT${index + 1}`),
+]);
+
+const IGNORED_FOLDER_NAMES = new Set([
+  '.git',
+  '.idea',
+  '.next',
+  '.nuxt',
+  '.vscode',
+  '__pycache__',
+  'build',
+  'dist',
+  'node_modules',
+  'target',
+  'vendor',
+]);

@@ -391,7 +391,6 @@ export function AIInputBar() {
 
   useLayoutEffect(() => {
     if (previousFilePath.current === filePath) return;
-    previousFilePath.current = filePath;
     if (!filePath || busy || streamPreview.visible) return;
 
     const nextTextSegment = createTextPromptSegment();
@@ -407,6 +406,7 @@ export function AIInputBar() {
     setPromptIconsVisible(false);
     setShellExpanded(false);
     editorRef.current?.blur();
+    previousFilePath.current = filePath;
   }, [
     busy,
     clearHighlightedSelection,

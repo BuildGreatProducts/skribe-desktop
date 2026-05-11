@@ -92,6 +92,14 @@ select {
   list-style-type: decimal;
 }
 
+.ProseMirror ol ol {
+  list-style-type: lower-alpha;
+}
+
+.ProseMirror ol ol ol {
+  list-style-type: lower-roman;
+}
+
 .ProseMirror ul ul {
   list-style-type: circle;
 }

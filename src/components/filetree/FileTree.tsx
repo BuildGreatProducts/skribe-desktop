@@ -370,7 +370,7 @@ function FolderHeading({
         <button
           type="button"
           aria-label="Folder actions"
-          className="absolute right-2 top-1.5 hidden h-6 w-6 shrink-0 items-center justify-center rounded-sm text-chrome-text-soft hover:bg-chrome-bg group-hover:flex"
+          className="absolute right-2 top-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-chrome-text-soft opacity-0 transition hover:bg-chrome-bg focus:opacity-100 group-hover:opacity-100"
           onClick={(event) => {
             event.stopPropagation();
             onMenuOpenChange(!menuOpen);
@@ -411,5 +411,15 @@ function FolderHeading({
 }
 
 function isPathInsideFolder(path: string, folderPath: string): boolean {
-  return path === folderPath || path.startsWith(`${folderPath}/`);
+  const normalizedPath = normalizePathForComparison(path);
+  const normalizedFolder = normalizePathForComparison(folderPath);
+  return (
+    normalizedPath === normalizedFolder ||
+    normalizedPath.startsWith(`${normalizedFolder}/`)
+  );
+}
+
+function normalizePathForComparison(path: string): string {
+  const normalized = path.replace(/\\/g, '/').replace(/\/+$/g, '');
+  return normalized || '/';
 }

@@ -105,8 +105,10 @@ function attachmentContextBlock(attachments?: PromptAttachment[] | null): string
 
   const list = selectedAttachments
     .map((attachment, index) => {
+      const name = sanitizeAttachmentField(attachment.name);
+      const path = sanitizeAttachmentField(attachment.path);
       const mimeType = attachment.mimeType ? `\n   MIME type: ${attachment.mimeType}` : '';
-      return `${index + 1}. ${attachment.name}\n   Absolute path: ${attachment.path}\n   Kind: ${attachment.kind}\n   Size: ${attachment.size} bytes${mimeType}`;
+      return `${index + 1}. ${name}\n   Absolute path: ${path}\n   Kind: ${attachment.kind}\n   Size: ${attachment.size} bytes${mimeType}`;
     })
     .join('\n');
 
@@ -116,4 +118,11 @@ User-attached files:
 ${list}
 
 These files were intentionally attached by the user. Read them when useful for the request, but do not modify attached files unless the user explicitly asks you to.`;
+}
+
+function sanitizeAttachmentField(value: string): string {
+  return value
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ');
 }

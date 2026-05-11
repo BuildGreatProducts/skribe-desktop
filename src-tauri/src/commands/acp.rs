@@ -371,9 +371,51 @@ fn target_sidecar_name() -> &'static str {
         "acp-sidecar-x86_64-apple-darwin"
     }
 
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]
+    {
+        "acp-sidecar-x86_64-unknown-linux-gnu"
+    }
+
+    #[cfg(all(target_os = "linux", target_arch = "aarch64", target_env = "gnu"))]
+    {
+        "acp-sidecar-aarch64-unknown-linux-gnu"
+    }
+
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "musl"))]
+    {
+        "acp-sidecar-x86_64-unknown-linux-musl"
+    }
+
+    #[cfg(all(target_os = "linux", target_arch = "aarch64", target_env = "musl"))]
+    {
+        "acp-sidecar-aarch64-unknown-linux-musl"
+    }
+
+    #[cfg(all(target_os = "windows", target_arch = "x86_64", target_env = "msvc"))]
+    {
+        "acp-sidecar-x86_64-pc-windows-msvc"
+    }
+
+    #[cfg(all(target_os = "windows", target_arch = "x86_64", target_env = "gnu"))]
+    {
+        "acp-sidecar-x86_64-pc-windows-gnu"
+    }
+
+    #[cfg(all(target_os = "windows", target_arch = "aarch64", target_env = "msvc"))]
+    {
+        "acp-sidecar-aarch64-pc-windows-msvc"
+    }
+
     #[cfg(not(any(
         all(target_os = "macos", target_arch = "aarch64"),
-        all(target_os = "macos", target_arch = "x86_64")
+        all(target_os = "macos", target_arch = "x86_64"),
+        all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"),
+        all(target_os = "linux", target_arch = "aarch64", target_env = "gnu"),
+        all(target_os = "linux", target_arch = "x86_64", target_env = "musl"),
+        all(target_os = "linux", target_arch = "aarch64", target_env = "musl"),
+        all(target_os = "windows", target_arch = "x86_64", target_env = "msvc"),
+        all(target_os = "windows", target_arch = "x86_64", target_env = "gnu"),
+        all(target_os = "windows", target_arch = "aarch64", target_env = "msvc")
     )))]
     {
         "acp-sidecar"

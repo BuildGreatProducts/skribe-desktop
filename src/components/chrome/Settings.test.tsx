@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_GLOBAL_WRITING_INSTRUCTIONS,
 } from '../../lib/writingInstructions';
+import { useFolderStore } from '../../stores/folderStore';
 import { usePreflightStore } from '../../stores/preflightStore';
+import { useSessionSettingsStore } from '../../stores/sessionSettingsStore';
 import { defaultSettings, useSettingsStore } from '../../stores/settingsStore';
 import type { AppSettings } from '../../types';
 import { Settings } from './Settings';
@@ -36,6 +38,8 @@ describe('Settings', () => {
       },
       run: vi.fn(async () => undefined),
     });
+    useFolderStore.setState({ path: '/tmp/project' });
+    useSessionSettingsStore.setState({ dangerouslySkipPermissionsByFolder: {} });
   });
 
   afterEach(() => {
@@ -58,7 +62,7 @@ describe('Settings', () => {
     expect(instructions).toHaveValue('Keep it warm and direct.');
   });
 
-  it('toggles the Claude Code permission bypass setting', () => {
+  it('toggles the Claude Code permission bypass for the open folder session', () => {
     render(<Settings open onClose={() => undefined} />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'AI' }));
@@ -70,9 +74,12 @@ describe('Settings', () => {
 
     fireEvent.click(toggle);
 
-    expect(useSettingsStore.getState().settings.ai.dangerouslySkipPermissions).toBe(
-      true,
-    );
+    expect(
+      useSessionSettingsStore.getState().dangerouslySkipPermissionsByFolder[
+        '/tmp/project'
+      ],
+    ).toBe(true);
+    expect(useSettingsStore.getState().settings.ai.dangerouslySkipPermissions).toBe(false);
     expect(toggle).toHaveAttribute('aria-checked', 'true');
   });
 });

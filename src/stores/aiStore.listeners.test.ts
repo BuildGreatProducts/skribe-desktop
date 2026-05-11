@@ -58,6 +58,10 @@ function installMocks({
       getState: () => settingsState,
     },
   }));
+  vi.doMock('./sessionSettingsStore', () => ({
+    dangerouslySkipPermissionsForFolder: (path: string | null) =>
+      Boolean(path && dangerouslySkipPermissions),
+  }));
   vi.doMock('./folderStore', () => ({
     useFolderStore: {
       getState: () => ({ path: folderPath }),
@@ -152,8 +156,11 @@ describe('AI store listener setup', () => {
     );
   });
 
-  it('submits the Claude Code permission bypass setting with each AI prompt', async () => {
-    const { tauriClient } = installMocks({ dangerouslySkipPermissions: true });
+  it('submits the folder session Claude Code permission bypass with each AI prompt', async () => {
+    const { tauriClient } = installMocks({
+      folderPath: '/tmp/project',
+      dangerouslySkipPermissions: true,
+    });
     const { useAiStore } = await import('./aiStore');
 
     await useAiStore.getState().startSession('/tmp/project');
