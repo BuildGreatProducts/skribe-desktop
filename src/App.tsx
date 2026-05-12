@@ -9,7 +9,7 @@ import { ProjectWritingInstructions } from './components/chrome/ProjectWritingIn
 import { Settings } from './components/chrome/Settings';
 import { Editor } from './components/editor/Editor';
 import { FileTree } from './components/filetree/FileTree';
-import { Button, Modal } from './components/ui';
+import { Button, Input, Modal, Select } from './components/ui';
 import { tauriClient } from './lib/tauri';
 import { useAiStore } from './stores/aiStore';
 import { useEditorStore } from './stores/editorStore';
@@ -23,13 +23,20 @@ export default function App() {
   const [projectInstructionsOpen, setProjectInstructionsOpen] = useState(false);
   const [reloadPrompt, setReloadPrompt] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [fileNamePromptOpen, setFileNamePromptOpen] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
+  const [newFileFolderPath, setNewFileFolderPath] = useState('');
+  const [folderNamePromptOpen, setFolderNamePromptOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
   const folderPath = useFolderStore((state) => state.path);
   const files = useFolderStore((state) => state.files);
+  const folders = useFolderStore((state) => state.folders);
   const fileTreeWidth = useSettingsStore((state) => state.settings.ui.fileTreeWidth);
   const loadSettings = useSettingsStore((state) => state.load);
   const openFolder = useFolderStore((state) => state.openFolder);
   const closeFolder = useFolderStore((state) => state.closeFolder);
   const createFile = useFolderStore((state) => state.createFile);
+  const createFolder = useFolderStore((state) => state.createFolder);
   const activeFilePath = useEditorStore((state) => state.filePath);
   const isDirty = useEditorStore((state) => state.isDirty);
   const openFile = useEditorStore((state) => state.openFile);
@@ -54,12 +61,43 @@ export default function App() {
     if (path) await openAndSelect(path);
   }, [openAndSelect]);
 
+  const openFileNamePrompt = useCallback(() => {
+    if (!folderPath) return;
+    setNewFileName('');
+    setNewFileFolderPath('');
+    setFileNamePromptOpen(true);
+  }, [folderPath]);
+
   const createAndOpenFile = useCallback(async () => {
     if (!folderPath) return;
+    const fileName = newFileName.trim();
+    if (!isValidFileName(fileName)) return;
     if (isDirty) await saveNow();
-    const file = await createFile();
-    if (file) await openFile(file.path);
-  }, [createFile, folderPath, isDirty, openFile, saveNow]);
+    const file = await createFile(fileName, newFileFolderPath || null);
+    if (file) {
+      setFileNamePromptOpen(false);
+      setNewFileName('');
+      setNewFileFolderPath('');
+      await openFile(file.path);
+    }
+  }, [createFile, folderPath, isDirty, newFileFolderPath, newFileName, openFile, saveNow]);
+
+  const openFolderNamePrompt = useCallback(() => {
+    if (!folderPath) return;
+    setNewFolderName('');
+    setFolderNamePromptOpen(true);
+  }, [folderPath]);
+
+  const createFolderInNavigation = useCallback(async () => {
+    if (!folderPath) return;
+    const folderName = newFolderName.trim();
+    if (!isValidFolderName(folderName)) return;
+    const folder = await createFolder(folderName);
+    if (folder) {
+      setFolderNamePromptOpen(false);
+      setNewFolderName('');
+    }
+  }, [createFolder, folderPath, newFolderName]);
 
   const goHome = useCallback(async () => {
     if (isDirty) await saveNow();
@@ -83,7 +121,16 @@ export default function App() {
   useEffect(() => {
     if (!folderPath) setSidebarCollapsed(false);
     if (!folderPath) setProjectInstructionsOpen(false);
+    if (!folderPath) setFileNamePromptOpen(false);
+    if (!folderPath) setFolderNamePromptOpen(false);
   }, [folderPath]);
+
+  useEffect(() => {
+    if (!newFileFolderPath) return;
+    if (!folders.some((folder) => folder.path === newFileFolderPath)) {
+      setNewFileFolderPath('');
+    }
+  }, [folders, newFileFolderPath]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -120,7 +167,7 @@ export default function App() {
       }
       if (key === 'n' && folderPath) {
         event.preventDefault();
-        await createAndOpenFile();
+        openFileNamePrompt();
       }
       if (key === 's') {
         event.preventDefault();
@@ -129,7 +176,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [createAndOpenFile, folderPath, pickAndOpenFolder, saveNow]);
+  }, [folderPath, openFileNamePrompt, pickAndOpenFolder, saveNow]);
 
   async function reloadFromDisk() {
     if (!reloadPrompt) return;
@@ -144,13 +191,12 @@ export default function App() {
         fileTreeWidth={folderPath ? fileTreeWidth : 0}
         sidebar={
           folderPath ? (
-            <FileTree
-              onCreateFile={() => void createAndOpenFile()}
-            />
+            <FileTree />
           ) : null
         }
         sidebarCollapsed={Boolean(folderPath) && sidebarCollapsed}
-        onCreateFile={() => void createAndOpenFile()}
+        onCreateFile={openFileNamePrompt}
+        onCreateFolder={openFolderNamePrompt}
         onGoHome={() => void goHome()}
         onToggleSidebar={() => setSidebarCollapsed((collapsed) => !collapsed)}
         banner={<PreflightBanner />}
@@ -173,6 +219,85 @@ export default function App() {
         onClose={() => setProjectInstructionsOpen(false)}
       />
       <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <Modal
+        open={fileNamePromptOpen}
+        title="New file"
+        onClose={() => setFileNamePromptOpen(false)}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void createAndOpenFile();
+          }}
+        >
+          <div className="space-y-3">
+            <Input
+              autoFocus
+              aria-label="File name"
+              placeholder="File name"
+              value={newFileName}
+              onChange={(event) => setNewFileName(event.target.value)}
+            />
+            <Select
+              aria-label="Folder"
+              className="w-full"
+              value={newFileFolderPath}
+              onChange={(event) => setNewFileFolderPath(event.target.value)}
+            >
+              <option value="">Project root</option>
+              {folders.map((folder) => (
+                <option key={folder.path} value={folder.path}>
+                  {folder.relativePath}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setFileNamePromptOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!isValidFileName(newFileName.trim())}>
+              Create file
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      <Modal
+        open={folderNamePromptOpen}
+        title="New folder"
+        onClose={() => setFolderNamePromptOpen(false)}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void createFolderInNavigation();
+          }}
+        >
+          <Input
+            autoFocus
+            aria-label="Folder name"
+            placeholder="Folder name"
+            value={newFolderName}
+            onChange={(event) => setNewFolderName(event.target.value)}
+          />
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setFolderNamePromptOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!isValidFolderName(newFolderName.trim())}>
+              Create folder
+            </Button>
+          </div>
+        </form>
+      </Modal>
       <Modal open={Boolean(reloadPrompt)} title="Reload from disk?" onClose={() => setReloadPrompt(null)}>
         <p className="mb-6 text-sm text-ink-soft">
           This file changed outside Skribe while you have unsaved edits.
@@ -187,3 +312,63 @@ export default function App() {
     </>
   );
 }
+
+function isValidFileName(fileName: string): boolean {
+  const finalName = markdownFileName(fileName);
+  return isValidPathName(fileName) && finalName.length <= MAX_PATH_NAME_LENGTH;
+}
+
+function isValidFolderName(folderName: string): boolean {
+  return (
+    isValidPathName(folderName) &&
+    !folderName.startsWith('.') &&
+    !IGNORED_FOLDER_NAMES.has(folderName.toLowerCase())
+  );
+}
+
+// Keep these frontend checks aligned with the Tauri filename sanitizers.
+function isValidPathName(name: string): boolean {
+  return (
+    name.length > 0 &&
+    name.length <= MAX_PATH_NAME_LENGTH &&
+    !name.includes('/') &&
+    !name.includes('\\') &&
+    !name.includes(':') &&
+    !name.endsWith(' ') &&
+    !name.endsWith('.') &&
+    name !== '.' &&
+    name !== '..' &&
+    !WINDOWS_RESERVED_BASE_NAMES.has(name.split('.')[0].toUpperCase())
+  );
+}
+
+function markdownFileName(fileName: string): string {
+  return fileName.endsWith('.md') || fileName.endsWith('.markdown')
+    ? fileName
+    : `${fileName}.md`;
+}
+
+const MAX_PATH_NAME_LENGTH = 255;
+
+const WINDOWS_RESERVED_BASE_NAMES = new Set([
+  'CON',
+  'PRN',
+  'AUX',
+  'NUL',
+  ...Array.from({ length: 9 }, (_, index) => `COM${index + 1}`),
+  ...Array.from({ length: 9 }, (_, index) => `LPT${index + 1}`),
+]);
+
+const IGNORED_FOLDER_NAMES = new Set([
+  '.git',
+  '.idea',
+  '.next',
+  '.nuxt',
+  '.vscode',
+  '__pycache__',
+  'build',
+  'dist',
+  'node_modules',
+  'target',
+  'vendor',
+]);

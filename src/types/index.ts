@@ -26,10 +26,27 @@ export type MarkdownFile = {
   modifiedAt: number;
 };
 
+export type MarkdownFolder = {
+  path: string;
+  relativePath: string;
+  name: string;
+};
+
 export type DocumentReference = {
   path: string;
   relativePath: string;
   name: string;
+};
+
+export type PromptAttachmentKind = 'image' | 'pdf' | 'text' | 'file';
+
+export type PromptAttachment = {
+  path: string;
+  name: string;
+  size: number;
+  kind: PromptAttachmentKind;
+  mimeType?: string | null;
+  previewDataUrl?: string | null;
 };
 
 export type AppSettings = {
@@ -51,7 +68,7 @@ export type AppSettings = {
     readingLevel: boolean;
   };
   ai: {
-    autoFocusInputOnFolderOpen: boolean;
+    dangerouslySkipPermissions: boolean;
     systemPrompt: string;
     projectWritingInstructions: Record<string, string>;
   };

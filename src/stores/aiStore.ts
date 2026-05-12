@@ -6,6 +6,7 @@ import { buildWritingInstructionsSystemPrompt } from '../lib/writingInstructions
 import { useEditorStore } from './editorStore';
 import { useFolderStore } from './folderStore';
 import { usePreflightStore } from './preflightStore';
+import { dangerouslySkipPermissionsForFolder } from './sessionSettingsStore';
 import { useSettingsStore } from './settingsStore';
 import type {
   AiError,
@@ -14,6 +15,7 @@ import type {
   AppErrorCode,
   DocumentReference,
   PendingClarification,
+  PromptAttachment,
 } from '../types';
 
 export type StreamPreview = {
@@ -59,6 +61,8 @@ type AiState = {
   prompt: string;
   promptFilePath: string | null;
   promptTarget: AiPromptTarget;
+  promptDocumentReferences: DocumentReference[];
+  promptAttachments: PromptAttachment[];
   partialResponse: string;
   streamPreview: StreamPreview;
   pendingClarification: PendingClarification | null;
@@ -72,6 +76,7 @@ type AiState = {
     activeFilePath: string,
     target?: AiPromptTarget,
     documentReferences?: DocumentReference[],
+    attachments?: PromptAttachment[],
   ) => Promise<void>;
   respondClarification: (optionId: string | null, response: string | null) => Promise<void>;
   cancel: () => Promise<void>;
@@ -86,6 +91,8 @@ export const useAiStore = create<AiState>((set, get) => ({
   prompt: '',
   promptFilePath: null,
   promptTarget: documentPromptTarget,
+  promptDocumentReferences: [],
+  promptAttachments: [],
   partialResponse: '',
   streamPreview: hiddenStreamPreview,
   pendingClarification: null,
@@ -168,6 +175,7 @@ export const useAiStore = create<AiState>((set, get) => ({
         if (event.sessionId !== get().sessionId) return;
         if (event.status === 'crashed') {
           set({
+            sessionId: null,
             status: 'error',
             error: {
               code: 'ACP_SIDECAR_FAILED',
@@ -194,7 +202,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       const setupStatus = usePreflightStore.getState().availability.status;
       if (setupStatus !== 'ready') return;
       if (get().sessionId) return;
-      set({ status: 'submitting', error: null, streamPreview: hiddenStreamPreview });
+      set({ error: null, streamPreview: hiddenStreamPreview });
       try {
         const { sessionId } = await tauriClient.acp.start(folderPath);
         set({ sessionId, status: 'idle', partialResponse: '' });
@@ -222,6 +230,8 @@ export const useAiStore = create<AiState>((set, get) => ({
       partialResponse: '',
       promptFilePath: null,
       promptTarget: documentPromptTarget,
+      promptDocumentReferences: [],
+      promptAttachments: [],
       streamPreview: hiddenStreamPreview,
       pendingClarification: null,
       error: null,
@@ -233,8 +243,16 @@ export const useAiStore = create<AiState>((set, get) => ({
     activeFilePath,
     target = documentPromptTarget,
     documentReferences = [],
+    attachments = [],
   ) => {
-    const sessionId = get().sessionId;
+    if (!prompt.trim()) return;
+    let sessionId = get().sessionId;
+    if (!sessionId) {
+      const folderPath = useFolderStore.getState().path;
+      if (!folderPath) return;
+      await get().startSession(folderPath);
+      sessionId = get().sessionId;
+    }
     if (!sessionId || !prompt.trim()) return;
     const promptTarget = target;
     set({
@@ -242,28 +260,58 @@ export const useAiStore = create<AiState>((set, get) => ({
       prompt,
       promptFilePath: activeFilePath,
       promptTarget,
+      promptDocumentReferences: documentReferences,
+      promptAttachments: attachments,
       partialResponse: '',
       streamPreview: pendingStreamPreview,
       pendingClarification: null,
       error: null,
       acceptingStream: true,
     });
-    try {
+    const sendWithSession = async (targetSessionId: string) => {
+      const settings = useSettingsStore.getState().settings;
+      const folderPath = useFolderStore.getState().path;
       const systemPrompt = buildWritingInstructionsSystemPrompt(
-        useSettingsStore.getState().settings,
-        useFolderStore.getState().path,
+        settings,
+        folderPath,
       );
       await tauriClient.acp.sendPrompt(
-        sessionId,
+        targetSessionId,
         prompt,
         activeFilePath,
         systemPrompt,
         selectedTextForPromptTarget(activeFilePath, promptTarget),
         documentReferences,
+        attachments,
+        dangerouslySkipPermissionsForFolder(folderPath),
       );
+    };
+
+    try {
+      await sendWithSession(sessionId);
       set({ status: 'streaming' });
     } catch (error) {
-      const aiError = classifyAiError(errorMessage(error));
+      let promptError = error;
+      if (isBrokenSidecarPipeError(error)) {
+        await tauriClient.acp.stop(sessionId).catch(() => undefined);
+        set({ sessionId: null });
+        const folderPath = useFolderStore.getState().path;
+        if (folderPath) {
+          await get().startSession(folderPath);
+          const restartedSessionId = get().sessionId;
+          if (restartedSessionId) {
+            try {
+              await sendWithSession(restartedSessionId);
+              set({ status: 'streaming' });
+              return;
+            } catch (retryError) {
+              promptError = retryError;
+            }
+          }
+        }
+      }
+
+      const aiError = classifyAiError(errorMessage(promptError));
       set({
         status: 'error',
         error: aiError,
@@ -286,6 +334,8 @@ export const useAiStore = create<AiState>((set, get) => ({
       partialResponse: '',
       pendingClarification: null,
       promptFilePath: null,
+      promptDocumentReferences: [],
+      promptAttachments: [],
       streamPreview: hiddenStreamPreview,
       acceptingStream: false,
     });
@@ -306,6 +356,8 @@ export const useAiStore = create<AiState>((set, get) => ({
       streamPreview: hiddenStreamPreview,
       pendingClarification: null,
       promptFilePath: null,
+      promptDocumentReferences: [],
+      promptAttachments: [],
       acceptingStream: false,
     });
   },
@@ -323,7 +375,9 @@ function classifyAiError(message = 'Claude Code reported an error.', code?: AppE
         ? 'CLAUDE_NOT_INSTALLED'
         : /(rate limit|too many requests|quota|429)/.test(normalized)
           ? 'CLAUDE_RATE_LIMITED'
-          : /(network|connection|econn|timed out|timeout|dns|fetch failed)/.test(normalized)
+          : /(broken pipe|os error 32|pipe closed|sidecar.*crash)/.test(normalized)
+            ? 'ACP_SIDECAR_FAILED'
+            : /(network|connection|econn|timed out|timeout|dns|fetch failed)/.test(normalized)
             ? 'CLAUDE_NETWORK_ERROR'
             : 'CLAUDE_UNKNOWN_ERROR');
 
@@ -364,4 +418,8 @@ function classifyAiError(message = 'Claude Code reported an error.', code?: AppE
         message,
       };
   }
+}
+
+function isBrokenSidecarPipeError(error: unknown): boolean {
+  return /(broken pipe|os error 32|pipe closed)/i.test(errorMessage(error));
 }

@@ -2,9 +2,10 @@ import { createRequire } from 'node:module';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import readline from 'node:readline';
 import { readFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { buildClaudeArgs } from './claudeArgs.js';
 import { ClaudeStreamTextAccumulator, toolCallsFromEvent } from './claudeStream.js';
-import { buildSkribePrompt, type DocumentReference } from './prompts.js';
+import { buildSkribePrompt, type DocumentReference, type PromptAttachment } from './prompts.js';
 
 type PromptCommand = {
   type: 'prompt';
@@ -14,6 +15,8 @@ type PromptCommand = {
   systemPrompt?: string | null;
   selectedText?: string | null;
   documentReferences?: DocumentReference[] | null;
+  attachments?: PromptAttachment[] | null;
+  dangerouslySkipPermissions?: boolean | null;
 };
 
 type CancelCommand = {
@@ -86,12 +89,20 @@ async function handlePrompt(command: PromptCommand) {
     workingFolder: process.cwd(),
     selectedText: command.selectedText,
     documentReferences: command.documentReferences,
+    attachments: command.attachments,
   });
 
-  current = spawn('claude', buildClaudeArgs(command.systemPrompt), {
-    cwd: process.cwd(),
-    env: process.env,
-  });
+  const attachmentDirectories = directoriesForAttachments(command.attachments);
+  current = spawn(
+    process.env.CLAUDE_CODE_PATH?.trim() || 'claude',
+    buildClaudeArgs(command.systemPrompt, attachmentDirectories, {
+      dangerouslySkipPermissions: command.dangerouslySkipPermissions === true,
+    }),
+    {
+      cwd: process.cwd(),
+      env: process.env,
+    },
+  );
 
   current.stdin.on('error', () => undefined);
   current.stdin.end(scaffolded);
@@ -176,6 +187,17 @@ async function handlePrompt(command: PromptCommand) {
     emit({ type: 'status', sessionId: command.sessionId, status: 'ready' });
     current = null;
   });
+}
+
+function directoriesForAttachments(attachments?: PromptAttachment[] | null): string[] {
+  return Array.from(
+    new Set(
+      attachments
+        ?.map((attachment) => attachment.path.trim())
+        .filter(Boolean)
+        .map((path) => dirname(path)) ?? [],
+    ),
+  );
 }
 
 const rl = readline.createInterface({

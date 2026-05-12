@@ -13,7 +13,12 @@ import {
   copyClaudeLoginCommand,
 } from '../../lib/claudeSetup';
 import { DEFAULT_GLOBAL_WRITING_INSTRUCTIONS } from '../../lib/writingInstructions';
+import { useFolderStore } from '../../stores/folderStore';
 import { usePreflightStore } from '../../stores/preflightStore';
+import {
+  normalizeFolderPath,
+  useSessionSettingsStore,
+} from '../../stores/sessionSettingsStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { Button, Modal, Select, Toggle } from '../ui';
 
@@ -35,8 +40,18 @@ export function Settings({ open, onClose }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('editor');
   const settings = useSettingsStore((state) => state.settings);
   const update = useSettingsStore((state) => state.update);
+  const folderPath = useFolderStore((state) => state.path);
+  const sessionFolderPath = folderPath ? normalizeFolderPath(folderPath) : null;
   const availability = usePreflightStore((state) => state.availability);
   const runPreflight = usePreflightStore((state) => state.run);
+  const dangerouslySkipPermissions = useSessionSettingsStore((state) =>
+    sessionFolderPath
+      ? state.dangerouslySkipPermissionsByFolder[sessionFolderPath] === true
+      : false,
+  );
+  const setDangerouslySkipPermissions = useSessionSettingsStore(
+    (state) => state.setDangerouslySkipPermissions,
+  );
 
   const moveTabFocus = (nextTab: SettingsTab) => {
     setActiveTab(nextTab);
@@ -330,10 +345,11 @@ export function Settings({ open, onClose }: SettingsProps) {
                     ...current,
                     ai: {
                       ...current.ai,
-                      autoFocusInputOnFolderOpen: false,
                       systemPrompt: DEFAULT_GLOBAL_WRITING_INSTRUCTIONS,
                     },
-                  }))
+                  })).then(() => {
+                    if (folderPath) setDangerouslySkipPermissions(folderPath, false);
+                  })
                 }
               >
                 Reset
@@ -351,15 +367,16 @@ export function Settings({ open, onClose }: SettingsProps) {
               onRecheck={() => void runPreflight({ force: true })}
             />
             <Toggle
-              label="Auto-focus AI input after opening a folder"
-              checked={settings.ai.autoFocusInputOnFolderOpen}
-              onChange={(checked) =>
-                void update((current) => ({
-                  ...current,
-                  ai: { ...current.ai, autoFocusInputOnFolderOpen: checked },
-                }))
-              }
+              label="Dangerously skip Claude Code permissions"
+              checked={dangerouslySkipPermissions}
+              onChange={(checked) => {
+                if (folderPath) setDangerouslySkipPermissions(folderPath, checked);
+              }}
             />
+            <p className="-mt-1 mb-2 text-xs leading-relaxed text-warning">
+              Bypasses Claude Code permission prompts for AI requests. Use only in
+              folders you trust.
+            </p>
             <label className="mt-3 block text-sm text-ink-soft">
               Global writing instructions
               <textarea

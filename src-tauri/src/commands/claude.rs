@@ -1,4 +1,4 @@
-use crate::{error::AppError, models::ClaudePreflight, state::PreflightState};
+use crate::{claude_path, error::AppError, models::ClaudePreflight, state::PreflightState};
 use std::{
     process::Command,
     sync::MutexGuard,
@@ -31,13 +31,7 @@ pub fn claude_preflight(
 fn run_preflight(
     cached: &mut MutexGuard<'_, Option<ClaudePreflight>>,
 ) -> Result<ClaudePreflight, AppError> {
-    let installed = Command::new("which")
-        .arg("claude")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false);
-
-    if !installed {
+    let Some(claude_binary) = claude_path::resolve_claude_binary() else {
         let result = ClaudePreflight {
             installed: false,
             version: None,
@@ -45,10 +39,11 @@ fn run_preflight(
         };
         cached.replace(result.clone());
         return Ok(result);
-    }
+    };
 
-    let version = Command::new("claude")
+    let version = Command::new(claude_binary)
         .arg("--version")
+        .env("PATH", claude_path::path_env())
         .output()
         .ok()
         .filter(|output| output.status.success())

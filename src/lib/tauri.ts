@@ -5,6 +5,8 @@ import type {
   ClaudePreflight,
   DocumentReference,
   MarkdownFile,
+  MarkdownFolder,
+  PromptAttachment,
 } from '../types';
 
 export const tauriClient = {
@@ -12,14 +14,27 @@ export const tauriClient = {
     pickFolder: () => invoke<string | null>('fs_pick_folder'),
     listMarkdownFiles: (folderPath: string) =>
       invoke<MarkdownFile[]>('fs_list_markdown_files', { folderPath }),
+    listFolders: (folderPath: string) =>
+      invoke<MarkdownFolder[]>('fs_list_folders', { folderPath }),
     readFile: (filePath: string) => invoke<string>('fs_read_file', { filePath }),
     writeFile: (filePath: string, content: string) =>
       invoke<void>('fs_write_file', { filePath, content }),
-    createFile: (folderPath: string, fileName: string) =>
-      invoke<MarkdownFile>('fs_create_file', { folderPath, fileName }),
+    createFile: (folderPath: string, fileName: string, parentFolderPath?: string | null) =>
+      invoke<MarkdownFile>('fs_create_file', {
+        folderPath,
+        fileName,
+        parentFolderPath: parentFolderPath ?? null,
+      }),
+    createFolder: (folderPath: string, folderName: string) =>
+      invoke<MarkdownFolder>('fs_create_folder', { folderPath, folderName }),
     renameFile: (oldPath: string, newName: string) =>
       invoke<MarkdownFile>('fs_rename_file', { oldPath, newName }),
+    renameFolder: (oldPath: string, newName: string) =>
+      invoke<MarkdownFolder>('fs_rename_folder', { oldPath, newName }),
     deleteFile: (filePath: string) => invoke<void>('fs_delete_file', { filePath }),
+    deleteFolder: (folderPath: string) => invoke<void>('fs_delete_folder', { folderPath }),
+    describeAttachments: (paths: string[]) =>
+      invoke<PromptAttachment[]>('fs_describe_attachments', { paths }),
     watchFolder: (folderPath: string) => invoke<void>('fs_watch_folder', { folderPath }),
     unwatchFolder: () => invoke<void>('fs_unwatch_folder'),
   },
@@ -42,6 +57,8 @@ export const tauriClient = {
       systemPrompt: string,
       selectedText?: string,
       documentReferences?: DocumentReference[],
+      attachments?: PromptAttachment[],
+      dangerouslySkipPermissions = false,
     ) =>
       invoke<void>('acp_send_prompt', {
         sessionId,
@@ -50,6 +67,8 @@ export const tauriClient = {
         systemPrompt,
         selectedText,
         documentReferences,
+        attachments: attachments?.map(attachmentPayload),
+        dangerouslySkipPermissions,
       }),
     respondClarification: (
       sessionId: string,
@@ -65,6 +84,16 @@ export const tauriClient = {
     stop: (sessionId: string) => invoke<void>('acp_stop', { sessionId }),
   },
 };
+
+function attachmentPayload(attachment: PromptAttachment) {
+  return {
+    path: attachment.path,
+    name: attachment.name,
+    size: attachment.size,
+    kind: attachment.kind,
+    mimeType: attachment.mimeType,
+  };
+}
 
 export function appError(error: unknown): { code: AppErrorCode | null; message: string } {
   if (typeof error === 'object' && error) {

@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
+import clsx from 'clsx';
 
 type TooltipProps = {
   label: string;
   children: ReactNode;
+  placement?: 'top' | 'bottom';
 };
 
-export function Tooltip({ label, children }: TooltipProps) {
+export function Tooltip({ label, children, placement = 'top' }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   return (
     <span
@@ -18,7 +20,14 @@ export function Tooltip({ label, children }: TooltipProps) {
     >
       {children}
       {visible ? (
-        <span className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded-sm bg-accent px-3 py-2 text-xs text-paper shadow-modal">
+        <span
+          className={clsx(
+            'pointer-events-none absolute left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded-sm bg-accent px-3 py-2 text-xs text-paper shadow-modal',
+            placement === 'top'
+              ? 'bottom-[calc(100%+8px)]'
+              : 'top-[calc(100%+8px)]',
+          )}
+        >
           {label}
         </span>
       ) : null}

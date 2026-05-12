@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { MarkdownFile } from '../../types';
-import { buildFileTreeRows, folderPathsForFiles } from './fileTreeRows';
+import type { MarkdownFile, MarkdownFolder } from '../../types';
+import { buildFileTreeRows, folderPathsForEntries, folderPathsForFiles } from './fileTreeRows';
 
 function markdownFile(relativePath: string): MarkdownFile {
   return {
@@ -9,6 +9,14 @@ function markdownFile(relativePath: string): MarkdownFile {
     name: relativePath.split('/').pop() ?? relativePath,
     size: 1,
     modifiedAt: 1,
+  };
+}
+
+function markdownFolder(relativePath: string): MarkdownFolder {
+  return {
+    path: `/project/${relativePath}`,
+    relativePath,
+    name: relativePath.split('/').pop() ?? relativePath,
   };
 }
 
@@ -51,6 +59,22 @@ describe('buildFileTreeRows', () => {
       { type: 'folder', folderPath: 'drafts', fileCount: 1, collapsed: true },
     ]);
   });
+
+  it('keeps empty folders visible', () => {
+    const files = [markdownFile('README.md')];
+    const folders = [markdownFolder('drafts')];
+
+    expect(buildFileTreeRows(files, new Set(), folders)).toMatchObject([
+      { type: 'file', file: { relativePath: 'README.md' } },
+      {
+        type: 'folder',
+        folderPath: 'drafts',
+        folderName: 'drafts',
+        fileCount: 0,
+        collapsed: false,
+      },
+    ]);
+  });
 });
 
 describe('folderPathsForFiles', () => {
@@ -60,6 +84,17 @@ describe('folderPathsForFiles', () => {
       markdownFile('drafts/Outline.md'),
       markdownFile('drafts/chapter-1/Scene.md'),
     ]);
+
+    expect([...paths]).toEqual(['drafts', 'drafts/chapter-1']);
+  });
+});
+
+describe('folderPathsForEntries', () => {
+  it('returns folder paths from both folders and files', () => {
+    const paths = folderPathsForEntries(
+      [markdownFile('drafts/chapter-1/Scene.md')],
+      [markdownFolder('drafts')],
+    );
 
     expect([...paths]).toEqual(['drafts', 'drafts/chapter-1']);
   });

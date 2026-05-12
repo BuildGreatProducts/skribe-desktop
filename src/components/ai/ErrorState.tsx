@@ -11,6 +11,8 @@ export function ErrorState() {
   const prompt = useAiStore((state) => state.prompt);
   const promptFilePath = useAiStore((state) => state.promptFilePath);
   const promptTarget = useAiStore((state) => state.promptTarget);
+  const promptDocumentReferences = useAiStore((state) => state.promptDocumentReferences);
+  const promptAttachments = useAiStore((state) => state.promptAttachments);
   const submitPrompt = useAiStore((state) => state.submitPrompt);
   const filePath = useEditorStore((state) => state.filePath);
   const runPreflight = usePreflightStore((state) => state.run);
@@ -69,7 +71,15 @@ export function ErrorState() {
         <Button
           variant="link"
           className="text-xs"
-          onClick={() => void submitPrompt(prompt, retryFilePath!, promptTarget)}
+          onClick={() =>
+            void submitPrompt(
+              prompt,
+              retryFilePath!,
+              promptTarget,
+              promptDocumentReferences,
+              promptAttachments,
+            )
+          }
         >
           Retry
         </Button>

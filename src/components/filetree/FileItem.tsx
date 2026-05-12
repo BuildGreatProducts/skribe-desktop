@@ -117,7 +117,7 @@ export function FileItem({
       ref={itemRef}
       className={clsx(
         'group relative flex h-16 items-center gap-3 rounded-sm px-2 py-2 text-sm text-chrome-text transition',
-        active ? 'bg-paper/70 text-accent hover:bg-paper/80' : 'hover:bg-highlight',
+        active ? 'bg-highlight text-accent hover:bg-highlight' : 'hover:bg-highlight',
       )}
       role="treeitem"
       aria-selected={active}

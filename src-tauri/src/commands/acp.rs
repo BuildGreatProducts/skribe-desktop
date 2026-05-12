@@ -1,6 +1,7 @@
 use crate::{
+    claude_path,
     error::AppError,
-    models::AcpStartResponse,
+    models::{AcpStartResponse, PromptAttachment},
     state::{AcpProcess, AcpState},
 };
 use serde::{Deserialize, Serialize};
@@ -12,7 +13,7 @@ use std::{
     process::{Command, Stdio},
     thread,
 };
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -57,11 +58,19 @@ pub fn acp_start(
 
     let session_id = Uuid::new_v4().to_string();
     let binary = sidecar_binary_path()?;
-    let mut child = Command::new(binary)
+    let mut command = Command::new(binary);
+    command
         .current_dir(folder)
+        .env("PATH", claude_path::path_env())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    if let Some(claude_binary) = claude_path::resolve_claude_binary() {
+        command.env("CLAUDE_CODE_PATH", claude_binary);
+    }
+
+    let mut child = command
         .spawn()
         .map_err(|error| AppError::AcpSidecarFailed(error.to_string()))?;
 
@@ -78,8 +87,8 @@ pub fn acp_start(
         .take()
         .ok_or_else(|| AppError::AcpSidecarFailed("Could not open sidecar stderr".into()))?;
 
-    spawn_stdout_relay(app.clone(), stdout);
-    spawn_stderr_relay(app.clone(), session_id.clone(), stderr);
+    spawn_stdout_relay(app.clone(), session_id.clone(), stdout);
+    spawn_stderr_drain(stderr);
 
     let mut process = AcpProcess { child, stdin };
     process
@@ -109,6 +118,8 @@ pub fn acp_send_prompt(
     system_prompt: Option<String>,
     selected_text: Option<String>,
     document_references: Option<Vec<DocumentReference>>,
+    attachments: Option<Vec<PromptAttachment>>,
+    dangerously_skip_permissions: Option<bool>,
     state: State<AcpState>,
 ) -> Result<(), AppError> {
     let mut sessions = state
@@ -118,6 +129,19 @@ pub fn acp_send_prompt(
     let session = sessions
         .get_mut(&session_id)
         .ok_or_else(|| AppError::AcpSidecarFailed("ACP session not found".into()))?;
+    let attachments = attachments
+        .unwrap_or_default()
+        .into_iter()
+        .map(|attachment| {
+            json!({
+                "path": attachment.path,
+                "name": attachment.name,
+                "size": attachment.size,
+                "kind": attachment.kind,
+                "mimeType": attachment.mime_type
+            })
+        })
+        .collect::<Vec<_>>();
     session
         .write_json(&json!({
             "type": "prompt",
@@ -126,7 +150,9 @@ pub fn acp_send_prompt(
             "activeFilePath": active_file_path,
             "systemPrompt": system_prompt,
             "selectedText": selected_text,
-            "documentReferences": document_references.unwrap_or_default()
+            "documentReferences": document_references.unwrap_or_default(),
+            "attachments": attachments,
+            "dangerouslySkipPermissions": dangerously_skip_permissions.unwrap_or(false)
         }))
         .map_err(|error| AppError::AcpSidecarFailed(error.to_string()))
 }
@@ -181,7 +207,7 @@ pub fn acp_stop(session_id: String, state: State<AcpState>) -> Result<(), AppErr
     Ok(())
 }
 
-fn spawn_stdout_relay(app: AppHandle, stdout: std::process::ChildStdout) {
+fn spawn_stdout_relay(app: AppHandle, session_id: String, stdout: std::process::ChildStdout) {
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines().map_while(Result::ok) {
@@ -203,23 +229,37 @@ fn spawn_stdout_relay(app: AppHandle, stdout: std::process::ChildStdout) {
                 }
             }
         }
+        mark_session_crashed(&app, &session_id);
     });
 }
 
-fn spawn_stderr_relay(app: AppHandle, session_id: String, stderr: std::process::ChildStderr) {
+fn mark_session_crashed(app: &AppHandle, session_id: &str) {
+    let state = app.state::<AcpState>();
+    let sessions = state.sessions.lock();
+    let removed = match sessions {
+        Ok(mut sessions) => sessions.remove(session_id),
+        Err(poisoned) => {
+            eprintln!("ACP session state mutex poisoned while marking session crashed");
+            let mut sessions = poisoned.into_inner();
+            sessions.remove(session_id)
+        }
+    };
+
+    if let Some(mut process) = removed {
+        let _ = process.child.kill();
+        let _ = app.emit(
+            "acp:status",
+            json!({ "sessionId": session_id, "status": "crashed" }),
+        );
+    }
+}
+
+fn spawn_stderr_drain(stderr: std::process::ChildStderr) {
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines().map_while(Result::ok) {
             if !line.trim().is_empty() {
-                let _ = app.emit(
-                    "acp:complete",
-                    json!({
-                        "sessionId": session_id,
-                        "status": "error",
-                        "code": "ACP_SIDECAR_FAILED",
-                        "error": line
-                    }),
-                );
+                eprintln!("ACP sidecar stderr: {line}");
             }
         }
     });
@@ -296,31 +336,94 @@ fn relay_event(app: &AppHandle, event: SidecarEvent) {
 }
 
 fn sidecar_binary_path() -> Result<PathBuf, AppError> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let triple = std::process::Command::new("rustc")
-        .args(["--print", "host-tuple"])
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
-        .filter(|triple| !triple.is_empty())
-        .unwrap_or_else(|| "aarch64-apple-darwin".to_string());
-
-    let dev = manifest_dir
-        .join("binaries")
-        .join(format!("acp-sidecar-{triple}"));
-    if dev.exists() {
-        return Ok(dev);
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(exe_dir) = current_exe.parent() {
+            for name in sidecar_binary_names() {
+                let candidate = exe_dir.join(name);
+                if candidate.exists() {
+                    return Ok(candidate);
+                }
+            }
+        }
     }
 
-    let plain = manifest_dir.join("binaries").join("acp-sidecar");
-    if plain.exists() {
-        return Ok(plain);
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for name in sidecar_binary_names() {
+        let candidate = manifest_dir.join("binaries").join(name);
+        if candidate.exists() {
+            return Ok(candidate);
+        }
     }
 
     Err(AppError::AcpSidecarFailed(
         "ACP sidecar binary has not been prepared. Run npm run sidecar:prepare.".into(),
     ))
+}
+
+fn sidecar_binary_names() -> [&'static str; 2] {
+    [target_sidecar_name(), "acp-sidecar"]
+}
+
+fn target_sidecar_name() -> &'static str {
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        "acp-sidecar-aarch64-apple-darwin"
+    }
+
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    {
+        "acp-sidecar-x86_64-apple-darwin"
+    }
+
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]
+    {
+        "acp-sidecar-x86_64-unknown-linux-gnu"
+    }
+
+    #[cfg(all(target_os = "linux", target_arch = "aarch64", target_env = "gnu"))]
+    {
+        "acp-sidecar-aarch64-unknown-linux-gnu"
+    }
+
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "musl"))]
+    {
+        "acp-sidecar-x86_64-unknown-linux-musl"
+    }
+
+    #[cfg(all(target_os = "linux", target_arch = "aarch64", target_env = "musl"))]
+    {
+        "acp-sidecar-aarch64-unknown-linux-musl"
+    }
+
+    #[cfg(all(target_os = "windows", target_arch = "x86_64", target_env = "msvc"))]
+    {
+        "acp-sidecar-x86_64-pc-windows-msvc"
+    }
+
+    #[cfg(all(target_os = "windows", target_arch = "x86_64", target_env = "gnu"))]
+    {
+        "acp-sidecar-x86_64-pc-windows-gnu"
+    }
+
+    #[cfg(all(target_os = "windows", target_arch = "aarch64", target_env = "msvc"))]
+    {
+        "acp-sidecar-aarch64-pc-windows-msvc"
+    }
+
+    #[cfg(not(any(
+        all(target_os = "macos", target_arch = "aarch64"),
+        all(target_os = "macos", target_arch = "x86_64"),
+        all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"),
+        all(target_os = "linux", target_arch = "aarch64", target_env = "gnu"),
+        all(target_os = "linux", target_arch = "x86_64", target_env = "musl"),
+        all(target_os = "linux", target_arch = "aarch64", target_env = "musl"),
+        all(target_os = "windows", target_arch = "x86_64", target_env = "msvc"),
+        all(target_os = "windows", target_arch = "x86_64", target_env = "gnu"),
+        all(target_os = "windows", target_arch = "aarch64", target_env = "msvc")
+    )))]
+    {
+        "acp-sidecar"
+    }
 }
 
 fn semver_lt(actual: &str, minimum: &str) -> bool {

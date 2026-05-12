@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 function installMocks({
   folderPath = null,
   projectWritingInstructions = {},
+  dangerouslySkipPermissions = false,
 }: {
   folderPath?: string | null;
   projectWritingInstructions?: Record<string, string>;
+  dangerouslySkipPermissions?: boolean;
 } = {}) {
   const preflightState = {
     availability: { status: 'ready' },
@@ -35,6 +37,7 @@ function installMocks({
       ai: {
         systemPrompt: 'Keep the voice spare and precise.',
         projectWritingInstructions,
+        dangerouslySkipPermissions,
       },
     },
   };
@@ -54,6 +57,10 @@ function installMocks({
     useSettingsStore: {
       getState: () => settingsState,
     },
+  }));
+  vi.doMock('./sessionSettingsStore', () => ({
+    dangerouslySkipPermissionsForFolder: (path: string | null) =>
+      Boolean(path && dangerouslySkipPermissions),
   }));
   vi.doMock('./folderStore', () => ({
     useFolderStore: {
@@ -101,7 +108,25 @@ describe('AI store listener setup', () => {
       'Keep the voice spare and precise.',
       undefined,
       [],
+      [],
+      false,
     );
+  });
+
+  it('restarts the sidecar and retries once when a prompt hits a broken pipe', async () => {
+    const { tauriClient } = installMocks({ folderPath: '/tmp/project' });
+    tauriClient.acp.sendPrompt
+      .mockRejectedValueOnce(new Error('Broken pipe (os error 32)'))
+      .mockResolvedValueOnce(undefined);
+    const { useAiStore } = await import('./aiStore');
+
+    await useAiStore.getState().startSession('/tmp/project');
+    await useAiStore.getState().submitPrompt('make it warmer', '/tmp/project/README.md');
+
+    expect(tauriClient.acp.stop).toHaveBeenCalledWith('session-1');
+    expect(tauriClient.acp.start).toHaveBeenCalledTimes(2);
+    expect(tauriClient.acp.sendPrompt).toHaveBeenCalledTimes(2);
+    expect(useAiStore.getState().status).toBe('streaming');
   });
 
   it('submits project writing instructions alongside global writing instructions', async () => {
@@ -126,6 +151,30 @@ describe('AI store listener setup', () => {
       ].join('\n\n'),
       undefined,
       [],
+      [],
+      false,
+    );
+  });
+
+  it('submits the folder session Claude Code permission bypass with each AI prompt', async () => {
+    const { tauriClient } = installMocks({
+      folderPath: '/tmp/project',
+      dangerouslySkipPermissions: true,
+    });
+    const { useAiStore } = await import('./aiStore');
+
+    await useAiStore.getState().startSession('/tmp/project');
+    await useAiStore.getState().submitPrompt('make it warmer', '/tmp/project/README.md');
+
+    expect(tauriClient.acp.sendPrompt).toHaveBeenCalledWith(
+      'session-1',
+      'make it warmer',
+      '/tmp/project/README.md',
+      'Keep the voice spare and precise.',
+      undefined,
+      [],
+      [],
+      true,
     );
   });
 
@@ -160,6 +209,51 @@ describe('AI store listener setup', () => {
           path: '/tmp/project/docs/Voice.md',
         },
       ],
+      [],
+      false,
+    );
+  });
+
+  it('submits prompt attachments with the AI prompt', async () => {
+    const { tauriClient } = installMocks();
+    const { useAiStore } = await import('./aiStore');
+
+    await useAiStore.getState().startSession('/tmp/project');
+    await useAiStore.getState().submitPrompt(
+      'use the screenshot',
+      '/tmp/project/README.md',
+      undefined,
+      [],
+      [
+        {
+          name: 'image.png',
+          path: '/tmp/project/image.png',
+          size: 1536,
+          kind: 'image',
+          mimeType: 'image/png',
+          previewDataUrl: 'data:image/png;base64,preview',
+        },
+      ],
+    );
+
+    expect(tauriClient.acp.sendPrompt).toHaveBeenCalledWith(
+      'session-1',
+      'use the screenshot',
+      '/tmp/project/README.md',
+      'Keep the voice spare and precise.',
+      undefined,
+      [],
+      [
+        {
+          name: 'image.png',
+          path: '/tmp/project/image.png',
+          size: 1536,
+          kind: 'image',
+          mimeType: 'image/png',
+          previewDataUrl: 'data:image/png;base64,preview',
+        },
+      ],
+      false,
     );
   });
 });

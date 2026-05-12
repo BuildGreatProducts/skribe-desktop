@@ -18,6 +18,25 @@ pub struct MarkdownFile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MarkdownFolder {
+    pub path: String,
+    pub relative_path: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptAttachment {
+    pub path: String,
+    pub name: String,
+    pub size: u64,
+    pub kind: String,
+    pub mime_type: Option<String>,
+    pub preview_data_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EditorSettings {
     pub font_size: u16,
     pub accent_color: String,
@@ -59,7 +78,8 @@ impl Default for WidgetSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiSettings {
-    pub auto_focus_input_on_folder_open: bool,
+    #[serde(default)]
+    pub dangerously_skip_permissions: bool,
     #[serde(default = "default_system_prompt")]
     pub system_prompt: String,
     #[serde(default)]
@@ -109,7 +129,7 @@ impl Default for AppSettings {
             },
             widgets: WidgetSettings::default(),
             ai: AiSettings {
-                auto_focus_input_on_folder_open: false,
+                dangerously_skip_permissions: false,
                 system_prompt: default_system_prompt(),
                 project_writing_instructions: BTreeMap::new(),
             },
@@ -179,6 +199,7 @@ mod tests {
             .ai
             .system_prompt
             .contains("Write like a careful human editor"));
+        assert!(!settings.ai.dangerously_skip_permissions);
         assert!(settings.ai.project_writing_instructions.is_empty());
         assert!(settings.widgets.word_count);
         assert!(settings.widgets.character_count);

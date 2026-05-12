@@ -1,4 +1,4 @@
-import type { MarkdownFile } from '../../types';
+import type { MarkdownFile, MarkdownFolder } from '../../types';
 
 export const FILE_ROW_HEIGHT = 64;
 export const FOLDER_ROW_HEIGHT = 36;
@@ -9,6 +9,7 @@ export type FileTreeRow =
       key: string;
       folderPath: string;
       folderName: string;
+      folder: MarkdownFolder | null;
       fileCount: number;
       collapsed: boolean;
     }
@@ -22,9 +23,12 @@ export type FileTreeRow =
 export function buildFileTreeRows(
   files: MarkdownFile[],
   collapsedFolderPaths: ReadonlySet<string>,
+  folders: MarkdownFolder[] = [],
 ): FileTreeRow[] {
   const rootFiles: MarkdownFile[] = [];
   const folderFiles = new Map<string, MarkdownFile[]>();
+  const folderByPath = new Map(folders.map((folder) => [folder.relativePath, folder]));
+  const folderPaths = new Set(folders.map((folder) => folder.relativePath));
 
   for (const file of files) {
     const folderPath = parentPath(file.relativePath);
@@ -36,6 +40,7 @@ export function buildFileTreeRows(
     const filesInFolder = folderFiles.get(folderPath) ?? [];
     filesInFolder.push(file);
     folderFiles.set(folderPath, filesInFolder);
+    folderPaths.add(folderPath);
   }
 
   const rows: FileTreeRow[] = rootFiles.map((file) => ({
@@ -45,13 +50,15 @@ export function buildFileTreeRows(
     folderPath: null,
   }));
 
-  for (const [folderPath, filesInFolder] of folderFiles) {
+  for (const folderPath of [...folderPaths].sort((a, b) => a.localeCompare(b))) {
+    const filesInFolder = folderFiles.get(folderPath) ?? [];
     const collapsed = collapsedFolderPaths.has(folderPath);
     rows.push({
       type: 'folder',
       key: `folder:${folderPath}`,
       folderPath,
       folderName: folderName(folderPath),
+      folder: folderByPath.get(folderPath) ?? null,
       fileCount: filesInFolder.length,
       collapsed,
     });
@@ -71,12 +78,22 @@ export function buildFileTreeRows(
   return rows;
 }
 
-export function folderPathsForFiles(files: MarkdownFile[]): Set<string> {
+export function folderPathsForEntries(
+  files: MarkdownFile[],
+  folders: MarkdownFolder[] = [],
+): Set<string> {
   return new Set(
-    files
-      .map((file) => parentPath(file.relativePath))
-      .filter((folderPath): folderPath is string => Boolean(folderPath)),
+    [
+      ...folders.map((folder) => folder.relativePath),
+      ...files
+        .map((file) => parentPath(file.relativePath))
+        .filter((folderPath): folderPath is string => Boolean(folderPath)),
+    ],
   );
+}
+
+export function folderPathsForFiles(files: MarkdownFile[]): Set<string> {
+  return folderPathsForEntries(files);
 }
 
 function parentPath(relativePath: string): string | null {

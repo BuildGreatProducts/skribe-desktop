@@ -1,12 +1,13 @@
 import {
   BookOpenTextIcon,
+  FolderPlusIcon,
   GearIcon,
   HouseLineIcon,
   PlusIcon,
   SidebarSimpleIcon,
 } from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
-import { Button, Tooltip } from '../ui';
+import { Button } from '../ui';
 
 type AppShellProps = {
   banner?: ReactNode;
@@ -15,6 +16,7 @@ type AppShellProps = {
   fileTreeWidth: number;
   sidebarCollapsed: boolean;
   onCreateFile: () => void;
+  onCreateFolder: () => void;
   onGoHome: () => void;
   onToggleSidebar: () => void;
   onOpenProjectInstructions: () => void;
@@ -29,6 +31,7 @@ export function AppShell({
   fileTreeWidth,
   sidebarCollapsed,
   onCreateFile,
+  onCreateFolder,
   onGoHome,
   onToggleSidebar,
   onOpenProjectInstructions,
@@ -71,56 +74,58 @@ export function AppShell({
               onClick={onGoHome}
               icon={<HouseLineIcon size={17} weight="bold" />}
             />
-            <Button
-              aria-label="New file"
-              variant="secondary"
-              className={iconButtonClass}
-              onClick={onCreateFile}
-              icon={<PlusIcon size={16} weight="bold" />}
-            />
           </div>
         ) : null}
         <div className="absolute right-3 top-2.5 z-30 flex items-center gap-2">
-          <Tooltip label="Project writing instructions">
-            <Button
-              aria-label="Project writing instructions"
-              variant="secondary"
-              className={iconButtonClass}
-              disabled={projectInstructionsDisabled}
-              onClick={onOpenProjectInstructions}
-              icon={<BookOpenTextIcon size={17} weight="bold" />}
-            />
-          </Tooltip>
-          <Tooltip label="Settings">
-            <Button
-              aria-label="Settings"
-              variant="secondary"
-              className={iconButtonClass}
-              onClick={onOpenSettings}
-              icon={<GearIcon size={16} weight="bold" />}
-            />
-          </Tooltip>
+          <Button
+            aria-label="Project writing instructions"
+            variant="secondary"
+            className={iconButtonClass}
+            disabled={projectInstructionsDisabled}
+            onClick={onOpenProjectInstructions}
+            icon={<BookOpenTextIcon size={17} weight="bold" />}
+          />
+          <Button
+            aria-label="Settings"
+            variant="secondary"
+            className={iconButtonClass}
+            onClick={onOpenSettings}
+            icon={<GearIcon size={16} weight="bold" />}
+          />
         </div>
         <div className="flex h-full">
-          <aside
-            className="min-h-0 shrink-0 overflow-hidden border-r border-hairline bg-chrome-bg transition-[width] duration-200 ease-in-out"
-            style={{ width: sidebarWidth }}
-            aria-label="File navigation"
-            aria-hidden={!hasSidebar}
-          >
-            {hasSidebar ? (
+          {hasSidebar ? (
+            <aside
+              className="min-h-0 shrink-0 overflow-hidden border-r border-hairline bg-chrome-bg transition-[width] duration-200 ease-in-out"
+              style={{ width: sidebarWidth }}
+              aria-label="File navigation"
+            >
               <div
                 className="flex h-full flex-col transition-opacity duration-200 ease-in-out"
                 style={{ width: expandedSidebarWidth, opacity: sidebarCollapsed ? 0 : 1 }}
                 aria-hidden={sidebarCollapsed}
               >
-                <div className="h-12 shrink-0" aria-hidden="true" data-tauri-drag-region />
+                <div className="flex h-12 shrink-0 items-start justify-end gap-2 px-2 pt-2.5">
+                  <div className="min-w-0 flex-1 self-stretch" aria-hidden="true" data-tauri-drag-region />
+                  <Button
+                    aria-label="New file"
+                    variant="secondary"
+                    className={iconButtonClass}
+                    onClick={onCreateFile}
+                    icon={<PlusIcon size={16} weight="bold" />}
+                  />
+                  <Button
+                    aria-label="New folder"
+                    variant="secondary"
+                    className={iconButtonClass}
+                    onClick={onCreateFolder}
+                    icon={<FolderPlusIcon size={17} weight="bold" />}
+                  />
+                </div>
                 <div className="min-h-0 flex-1">{sidebar}</div>
               </div>
-            ) : (
-              null
-            )}
-          </aside>
+            </aside>
+          ) : null}
           <main className="min-w-0 flex-1 bg-paper">{children}</main>
         </div>
       </div>
