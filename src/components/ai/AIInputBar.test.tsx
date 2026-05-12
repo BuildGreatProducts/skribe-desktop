@@ -442,6 +442,44 @@ describe('AIInputBar selection collapse behavior', () => {
     );
   });
 
+  it('pastes rich clipboard text into the prompt without keeping styling', () => {
+    useEditorStore.setState({ filePath, highlightedSelection: null });
+    const submitPrompt = vi.fn(async () => undefined);
+    useAiStore.setState({ submitPrompt });
+    render(<AIInputBar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open AI prompt' }));
+    const editor = setPromptText('Rewrite: ');
+    const getData = vi.fn((type: string) => {
+      if (type === 'text/plain') return 'bold idea';
+      if (type === 'text/html') {
+        return '<span style="font-family: Comic Sans MS; color: red"><b>bold idea</b></span>';
+      }
+      return '';
+    });
+
+    fireEvent.paste(editor, {
+      clipboardData: {
+        getData,
+        types: ['text/plain', 'text/html'],
+      },
+    });
+
+    expect(editor).toHaveTextContent('Rewrite: bold idea');
+    expect(editor.querySelector('[style]')).toBeNull();
+    expect(editor.querySelector('b')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit AI prompt' }));
+
+    expect(submitPrompt).toHaveBeenCalledWith(
+      'Rewrite: bold idea',
+      filePath,
+      { type: 'document' },
+      [],
+      [],
+    );
+  });
+
   it('normalizes the browser empty block after deleting all prompt text', () => {
     useEditorStore.setState({ filePath, highlightedSelection: null });
     render(<AIInputBar />);
