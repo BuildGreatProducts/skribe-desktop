@@ -44,8 +44,55 @@ pub fn path_env() -> OsString {
 fn find_on_path(binary: &str) -> Option<PathBuf> {
     candidate_path_entries()
         .into_iter()
-        .map(|dir| dir.join(binary))
+        .flat_map(|dir| executable_candidates(&dir, binary))
         .find(|path| is_executable(path))
+}
+
+fn executable_candidates(dir: &Path, binary: &str) -> Vec<PathBuf> {
+    if Path::new(binary).extension().is_some() {
+        return vec![dir.join(binary)];
+    }
+
+    #[cfg(windows)]
+    {
+        windows_executable_extensions()
+            .into_iter()
+            .map(|extension| dir.join(format!("{binary}{extension}")))
+            .collect()
+    }
+
+    #[cfg(not(windows))]
+    {
+        vec![dir.join(binary)]
+    }
+}
+
+#[cfg(windows)]
+fn windows_executable_extensions() -> Vec<String> {
+    env::var_os("PATHEXT")
+        .map(|value| {
+            value
+                .to_string_lossy()
+                .split(';')
+                .filter_map(|extension| {
+                    let trimmed = extension.trim();
+                    if trimmed.is_empty() {
+                        None
+                    } else if trimmed.starts_with('.') {
+                        Some(trimmed.to_string())
+                    } else {
+                        Some(format!(".{trimmed}"))
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .filter(|extensions| !extensions.is_empty())
+        .unwrap_or_else(|| {
+            [".exe", ".cmd", ".bat", ".com"]
+                .into_iter()
+                .map(str::to_string)
+                .collect()
+        })
 }
 
 fn candidate_path_entries() -> Vec<PathBuf> {
@@ -132,7 +179,7 @@ fn is_executable(path: &Path) -> bool {
             .map(|extension| {
                 matches!(
                     extension.to_ascii_lowercase().as_str(),
-                    "exe" | "cmd" | "bat"
+                    "exe" | "cmd" | "bat" | "com"
                 )
             })
             .unwrap_or(false)

@@ -234,12 +234,16 @@ fn spawn_stdout_relay(app: AppHandle, session_id: String, stdout: std::process::
 }
 
 fn mark_session_crashed(app: &AppHandle, session_id: &str) {
-    let removed = app
-        .state::<AcpState>()
-        .sessions
-        .lock()
-        .ok()
-        .and_then(|mut sessions| sessions.remove(session_id));
+    let state = app.state::<AcpState>();
+    let sessions = state.sessions.lock();
+    let removed = match sessions {
+        Ok(mut sessions) => sessions.remove(session_id),
+        Err(poisoned) => {
+            eprintln!("ACP session state mutex poisoned while marking session crashed");
+            let mut sessions = poisoned.into_inner();
+            sessions.remove(session_id)
+        }
+    };
 
     if let Some(mut process) = removed {
         let _ = process.child.kill();

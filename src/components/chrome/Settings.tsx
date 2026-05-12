@@ -15,7 +15,10 @@ import {
 import { DEFAULT_GLOBAL_WRITING_INSTRUCTIONS } from '../../lib/writingInstructions';
 import { useFolderStore } from '../../stores/folderStore';
 import { usePreflightStore } from '../../stores/preflightStore';
-import { useSessionSettingsStore } from '../../stores/sessionSettingsStore';
+import {
+  normalizeFolderPath,
+  useSessionSettingsStore,
+} from '../../stores/sessionSettingsStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { Button, Modal, Select, Toggle } from '../ui';
 
@@ -38,10 +41,13 @@ export function Settings({ open, onClose }: SettingsProps) {
   const settings = useSettingsStore((state) => state.settings);
   const update = useSettingsStore((state) => state.update);
   const folderPath = useFolderStore((state) => state.path);
+  const sessionFolderPath = folderPath ? normalizeFolderPath(folderPath) : null;
   const availability = usePreflightStore((state) => state.availability);
   const runPreflight = usePreflightStore((state) => state.run);
   const dangerouslySkipPermissions = useSessionSettingsStore((state) =>
-    folderPath ? state.dangerouslySkipPermissionsByFolder[folderPath] === true : false,
+    sessionFolderPath
+      ? state.dangerouslySkipPermissionsByFolder[sessionFolderPath] === true
+      : false,
   );
   const setDangerouslySkipPermissions = useSessionSettingsStore(
     (state) => state.setDangerouslySkipPermissions,
