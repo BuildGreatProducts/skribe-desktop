@@ -6,6 +6,7 @@ type EditorState = {
   filePath: string | null;
   content: string;
   originalContent: string;
+  pendingSaveContent: string | null;
   isDirty: boolean;
   lastSavedAt: number | null;
   saveStatus: SaveStatus;
@@ -27,6 +28,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   filePath: null,
   content: '',
   originalContent: '',
+  pendingSaveContent: null,
   isDirty: false,
   lastSavedAt: null,
   saveStatus: 'idle',
@@ -43,6 +45,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         filePath,
         content,
         originalContent: content,
+        pendingSaveContent: null,
         isDirty: false,
         loading: false,
         saveStatus: 'saved',
@@ -59,6 +62,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       filePath: null,
       content: '',
       originalContent: '',
+      pendingSaveContent: null,
       isDirty: false,
       saveStatus: 'idle',
       saveTimer: null,
@@ -70,6 +74,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const saveTimer = options?.skipAutosave
       ? null
       : window.setTimeout(() => {
+          set({ saveTimer: null });
           void get().save();
         }, 500);
     set({
@@ -82,17 +87,54 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   save: async () => {
     const { filePath, content } = get();
     if (!filePath) return;
-    set({ saveStatus: 'saving' });
+    set({ saveStatus: 'saving', pendingSaveContent: content });
     try {
       await tauriClient.fs.writeFile(filePath, content);
-      set({
-        isDirty: false,
-        lastSavedAt: Date.now(),
-        saveStatus: 'saved',
-        originalContent: content,
+      const savedAt = Date.now();
+      set((state) => {
+        const pendingSaveContent =
+          state.pendingSaveContent === content
+            ? null
+            : state.pendingSaveContent;
+
+        if (state.filePath !== filePath) {
+          return { pendingSaveContent };
+        }
+
+        if (state.content !== content) {
+          return {
+            pendingSaveContent,
+            isDirty: true,
+            lastSavedAt: savedAt,
+            saveStatus:
+              state.saveStatus === 'saving' ? 'editing' : state.saveStatus,
+            originalContent: content,
+          };
+        }
+
+        return {
+          pendingSaveContent,
+          isDirty: false,
+          lastSavedAt: savedAt,
+          saveStatus: 'saved',
+          originalContent: content,
+        };
       });
     } catch (error) {
-      set({ saveStatus: 'error', error: errorMessage(error) });
+      set((state) => {
+        if (
+          state.filePath !== filePath ||
+          state.pendingSaveContent !== content
+        ) {
+          return {};
+        }
+
+        return {
+          pendingSaveContent: null,
+          saveStatus: 'error',
+          error: errorMessage(error),
+        };
+      });
     }
   },
   saveNow: async () => {
@@ -104,6 +146,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({
       content,
       originalContent: content,
+      pendingSaveContent: null,
       isDirty: false,
       saveStatus: 'saved',
     });

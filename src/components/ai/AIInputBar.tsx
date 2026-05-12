@@ -19,6 +19,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ClipboardEvent,
   type DragEvent,
 } from 'react';
 import { targetFromSelection } from '../../lib/aiPromptTarget';
@@ -60,6 +61,7 @@ type DocumentPromptSegment = {
 };
 
 type PromptSegment = TextPromptSegment | DocumentPromptSegment;
+type PromptClipboardData = ClipboardEvent<HTMLDivElement>['clipboardData'];
 type PromptDataTransfer = DragEvent<HTMLDivElement>['dataTransfer'];
 type FileWithOptionalPath = { path?: unknown };
 
@@ -570,6 +572,15 @@ export function AIInputBar() {
     return true;
   }
 
+  function handlePromptPaste(event: ClipboardEvent<HTMLDivElement>) {
+    const text = plainTextFromClipboard(event.clipboardData);
+    if (text === null) return;
+
+    event.preventDefault();
+    insertPlainTextAtSelection(editorRef.current, text);
+    syncEditorState();
+  }
+
   function clearPrompt() {
     const nextTextSegment = createTextPromptSegment();
     commitPromptSegments([nextTextSegment]);
@@ -765,6 +776,7 @@ export function AIInputBar() {
                 onInput={syncEditorState}
                 onClick={syncEditorState}
                 onFocus={syncEditorState}
+                onPaste={handlePromptPaste}
                 onKeyDown={(event) => {
                   if (mentionMenuOpen) {
                     if (event.key === 'ArrowDown') {
@@ -1108,6 +1120,67 @@ function hasSingleEmptyTextSegmentElement(editor: HTMLElement): boolean {
     onlyChild.dataset.textSegment === 'true' &&
     (onlyChild.textContent ?? '') === ''
   );
+}
+
+function plainTextFromClipboard(
+  clipboardData: PromptClipboardData,
+): string | null {
+  const types = Array.from(clipboardData.types);
+  const plainText = clipboardData.getData('text/plain');
+  if (plainText || types.includes('text/plain')) return plainText;
+
+  const legacyText = clipboardData.getData('text');
+  if (legacyText || types.includes('text')) return legacyText;
+
+  const html = clipboardData.getData('text/html');
+  if (html || types.includes('text/html')) return textFromHtml(html);
+
+  return null;
+}
+
+function textFromHtml(html: string): string {
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  return container.innerText ?? container.textContent ?? '';
+}
+
+function insertPlainTextAtSelection(editor: HTMLElement | null, text: string) {
+  if (!editor) return;
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    editor.appendChild(document.createTextNode(text));
+    placeCaretAtEnd(editor);
+    editor.focus();
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (
+    !editor.contains(range.startContainer) ||
+    !editor.contains(range.endContainer)
+  ) {
+    editor.appendChild(document.createTextNode(text));
+    placeCaretAtEnd(editor);
+    editor.focus();
+    return;
+  }
+
+  range.deleteContents();
+  if (!text) {
+    selection.removeAllRanges();
+    selection.addRange(range);
+    editor.focus();
+    return;
+  }
+
+  const textNode = document.createTextNode(text);
+  range.insertNode(textNode);
+  range.setStart(textNode, textNode.length);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  editor.focus();
 }
 
 function appendNodeAsSegment(segments: PromptSegment[], node: Node) {

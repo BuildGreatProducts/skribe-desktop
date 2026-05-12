@@ -10,6 +10,7 @@ import { Settings } from './components/chrome/Settings';
 import { Editor } from './components/editor/Editor';
 import { FileTree } from './components/filetree/FileTree';
 import { Button, Input, Modal, Select } from './components/ui';
+import { handleActiveFileChange } from './lib/activeFileChange';
 import { tauriClient } from './lib/tauri';
 import { useAiStore } from './stores/aiStore';
 import { useEditorStore } from './stores/editorStore';
@@ -136,22 +137,19 @@ export default function App() {
     if (!isTauri()) return;
 
     const unlistenPromise = listen<FsChangeEvent>('fs:change', async ({ payload }) => {
-      if (!activeFilePath || payload.path !== activeFilePath) return;
-      if (payload.event === 'deleted') {
-        closeFile();
-        return;
-      }
-      if (!isDirty) {
-        const content = await tauriClient.fs.readFile(activeFilePath);
-        applyExternalContent(content);
-      } else {
-        setReloadPrompt(activeFilePath);
-      }
+      await handleActiveFileChange({
+        payload,
+        readFile: tauriClient.fs.readFile,
+        getEditorState: useEditorStore.getState,
+        applyExternalContent,
+        closeFile,
+        setReloadPrompt,
+      });
     });
     return () => {
       void unlistenPromise.then((unlisten) => unlisten());
     };
-  }, [activeFilePath, applyExternalContent, closeFile, isDirty]);
+  }, [applyExternalContent, closeFile]);
 
   useEffect(() => {
     const handler = async (event: KeyboardEvent) => {
