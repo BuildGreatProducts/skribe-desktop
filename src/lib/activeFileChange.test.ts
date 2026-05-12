@@ -20,6 +20,48 @@ function editorState(
 }
 
 describe('handleActiveFileChange', () => {
+  it('closes the active file when it is deleted', async () => {
+    const readFile = vi.fn(async () => 'Draft');
+    const applyExternalContent = vi.fn();
+    const closeFile = vi.fn();
+    const setReloadPrompt = vi.fn();
+
+    await handleActiveFileChange({
+      payload: { event: 'deleted', path: filePath },
+      readFile,
+      getEditorState: () => editorState(),
+      applyExternalContent,
+      closeFile,
+      setReloadPrompt,
+    });
+
+    expect(closeFile).toHaveBeenCalledOnce();
+    expect(setReloadPrompt).toHaveBeenCalledWith(null);
+    expect(readFile).not.toHaveBeenCalled();
+    expect(applyExternalContent).not.toHaveBeenCalled();
+  });
+
+  it('ignores watcher events for unrelated paths', async () => {
+    const readFile = vi.fn(async () => 'External edit');
+    const applyExternalContent = vi.fn();
+    const closeFile = vi.fn();
+    const setReloadPrompt = vi.fn();
+
+    await handleActiveFileChange({
+      payload: { event: 'modified', path: '/tmp/project/other.txt' },
+      readFile,
+      getEditorState: () => editorState(),
+      applyExternalContent,
+      closeFile,
+      setReloadPrompt,
+    });
+
+    expect(readFile).not.toHaveBeenCalled();
+    expect(applyExternalContent).not.toHaveBeenCalled();
+    expect(setReloadPrompt).not.toHaveBeenCalled();
+    expect(closeFile).not.toHaveBeenCalled();
+  });
+
   it('ignores watcher events for the last content Skribe saved while the user keeps typing', async () => {
     const applyExternalContent = vi.fn();
     const setReloadPrompt = vi.fn();

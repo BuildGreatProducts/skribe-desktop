@@ -136,5 +136,14 @@ describe('editorStore saving', () => {
 
     secondSave.resolve();
     await secondSavePromise;
+
+    expect(useEditorStore.getState()).toMatchObject({
+      content: 'Draft AB',
+      originalContent: 'Draft AB',
+      pendingSaveContent: null,
+      isDirty: false,
+      saveStatus: 'saved',
+      error: null,
+    });
   });
 });
