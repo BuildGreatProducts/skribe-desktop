@@ -1,13 +1,13 @@
 import { EditorContent, useEditor, type Editor as TiptapEditor } from '@tiptap/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 import { useAiStore } from '../../stores/aiStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import type { HighlightedTextSelection } from '../../types';
+import type { AiError, HighlightedTextSelection } from '../../types';
 import { StatusLine } from '../status/StatusLine';
 import { extensions } from './extensions';
 import { EditorToolbar } from './EditorToolbar';
-import { editorToMarkdown, setMarkdown } from './markdown';
+import { editorToMarkdown, setMarkdown, tryInsertMarkdownAt, trySetMarkdown } from './markdown';
 import { shouldApplyStream } from './streaming';
 
 export function Editor() {
@@ -42,9 +42,11 @@ export function Editor() {
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z' && beforeAi.current) {
           event.preventDefault();
           if (editor) {
-            setMarkdown(editor, beforeAi.current, true);
-            setContent(beforeAi.current);
-            beforeAi.current = null;
+            const restored = trySetMarkdown(editor, beforeAi.current, true);
+            if (restored) {
+              setContent(beforeAi.current);
+              beforeAi.current = null;
+            }
           }
           return true;
         }
@@ -93,9 +95,10 @@ export function Editor() {
     if (!editor || aiStatus !== 'streaming' || filePath !== promptFilePath) return;
     if (!beforeAi.current) beforeAi.current = content;
     if (!shouldApplyStream(lastStream.current, partialResponse)) return;
-    lastStream.current = partialResponse;
     if (promptTarget.type === 'selection') return;
-    setMarkdown(editor, partialResponse, false);
+    if (trySetMarkdown(editor, partialResponse, false)) {
+      lastStream.current = partialResponse;
+    }
   }, [aiStatus, content, editor, filePath, partialResponse, promptFilePath, promptTarget]);
 
   useEffect(() => {
@@ -108,7 +111,7 @@ export function Editor() {
   useEffect(() => {
     if (!editor || aiStatus === 'streaming' || !streamComplete) return;
     if (promptFilePath && filePath !== promptFilePath) return;
-    if (!lastStream.current && promptTarget.type !== 'selection') return;
+    if (!partialResponse && !lastStream.current && promptTarget.type !== 'selection') return;
 
     const finalResponse = partialResponse || lastStream.current;
     if (promptTarget.type === 'selection') {
@@ -123,26 +126,37 @@ export function Editor() {
         return;
       }
 
-      const replaced = editor.commands.insertContentAt(
+      const replaced = tryInsertMarkdownAt(
+        editor,
         { from: selection.from, to: selection.to },
         finalResponse,
-        {
-          updateSelection: true,
-          parseOptions: { preserveWhitespace: 'full' },
-        },
       );
 
       if (!replaced) {
-        beforeAi.current = null;
-        lastStream.current = '';
-        markAiError({
-          code: 'AI_SELECTION_STALE',
-          message: 'Claude returned replacement text, but Skribe could not apply it to the selection.',
-        });
+        failAiApply(
+          editor,
+          beforeAi,
+          lastStream,
+          markAiError,
+          'Claude returned replacement text, but Skribe could not apply it to the selection.',
+        );
         return;
       }
 
-      const updated = editorToMarkdown(editor);
+      let updated: string;
+      try {
+        updated = editorToMarkdown(editor);
+      } catch (error) {
+        console.error('Failed to serialize editor content after AI insertion.', error);
+        failAiApply(
+          editor,
+          beforeAi,
+          lastStream,
+          markAiError,
+          'Claude updated the selection, but Skribe could not serialize the document afterward.',
+        );
+        return;
+      }
       setContent(updated);
       void saveNow();
       lastStream.current = '';
@@ -150,7 +164,17 @@ export function Editor() {
     }
 
     if (finalResponse !== lastStream.current) {
-      setMarkdown(editor, finalResponse, false);
+      const applied = trySetMarkdown(editor, finalResponse, false);
+      if (!applied) {
+        failAiApply(
+          editor,
+          beforeAi,
+          lastStream,
+          markAiError,
+          'Claude returned Markdown, but Skribe could not apply it to the document.',
+        );
+        return;
+      }
     }
     setContent(finalResponse);
     void saveNow();
@@ -199,4 +223,22 @@ function selectionIsStale(editor: TiptapEditor, selection: HighlightedTextSelect
   }
 
   return editor.state.doc.textBetween(selection.from, selection.to, '\n\n') !== selection.text;
+}
+
+function failAiApply(
+  editor: TiptapEditor,
+  beforeAi: MutableRefObject<string | null>,
+  lastStream: MutableRefObject<string>,
+  markAiError: (error: AiError) => void,
+  message: string,
+) {
+  if (beforeAi.current) {
+    trySetMarkdown(editor, beforeAi.current, false);
+  }
+  beforeAi.current = null;
+  lastStream.current = '';
+  markAiError({
+    code: 'CLAUDE_UNKNOWN_ERROR',
+    message,
+  });
 }
