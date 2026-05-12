@@ -102,4 +102,39 @@ describe('editorStore saving', () => {
       saveStatus: 'saved',
     });
   });
+
+  it('ignores stale save errors after a newer save becomes active', async () => {
+    const firstSave = deferred<void>();
+    const secondSave = deferred<void>();
+    tauriMocks.writeFile
+      .mockReturnValueOnce(firstSave.promise)
+      .mockReturnValueOnce(secondSave.promise);
+    useEditorStore.setState({
+      content: 'Draft A',
+      originalContent: 'Draft',
+      isDirty: true,
+      saveStatus: 'editing',
+    });
+
+    const firstSavePromise = useEditorStore.getState().save();
+    useEditorStore.setState({
+      content: 'Draft AB',
+      isDirty: true,
+      saveStatus: 'editing',
+    });
+    const secondSavePromise = useEditorStore.getState().save();
+
+    firstSave.reject(new Error('first save failed'));
+    await firstSavePromise;
+
+    expect(useEditorStore.getState()).toMatchObject({
+      content: 'Draft AB',
+      pendingSaveContent: 'Draft AB',
+      saveStatus: 'saving',
+      error: null,
+    });
+
+    secondSave.resolve();
+    await secondSavePromise;
+  });
 });

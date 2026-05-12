@@ -99,4 +99,30 @@ describe('handleActiveFileChange', () => {
 
     expect(applyExternalContent).toHaveBeenCalledWith('External edit');
   });
+
+  it('skips watcher processing when reading disk content fails', async () => {
+    const applyExternalContent = vi.fn();
+    const setReloadPrompt = vi.fn();
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+
+    await handleActiveFileChange({
+      payload: { event: 'modified', path: filePath },
+      readFile: vi.fn(async () => {
+        throw new Error('file disappeared');
+      }),
+      getEditorState: () => editorState(),
+      applyExternalContent,
+      closeFile: vi.fn(),
+      setReloadPrompt,
+    });
+
+    expect(applyExternalContent).not.toHaveBeenCalled();
+    expect(setReloadPrompt).not.toHaveBeenCalled();
+    expect(debugSpy).toHaveBeenCalledWith(
+      'readFile failed for activeFilePath.',
+      expect.objectContaining({ activeFilePath: filePath }),
+    );
+
+    debugSpy.mockRestore();
+  });
 });

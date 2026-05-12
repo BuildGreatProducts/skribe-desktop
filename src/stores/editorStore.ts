@@ -121,12 +121,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         };
       });
     } catch (error) {
-      set((state) => ({
-        pendingSaveContent:
-          state.pendingSaveContent === content ? null : state.pendingSaveContent,
-        saveStatus: 'error',
-        error: errorMessage(error),
-      }));
+      set((state) => {
+        if (
+          state.filePath !== filePath ||
+          state.pendingSaveContent !== content
+        ) {
+          return {};
+        }
+
+        return {
+          pendingSaveContent: null,
+          saveStatus: 'error',
+          error: errorMessage(error),
+        };
+      });
     }
   },
   saveNow: async () => {

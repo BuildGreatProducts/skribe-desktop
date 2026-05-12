@@ -34,7 +34,17 @@ export async function handleActiveFileChange({
     return;
   }
 
-  const diskContent = await readFile(activeFilePath);
+  let diskContent: string;
+  try {
+    diskContent = await readFile(activeFilePath);
+  } catch (error) {
+    console.debug('readFile failed for activeFilePath.', {
+      activeFilePath,
+      error,
+    });
+    return;
+  }
+
   const latestState = getEditorState();
   if (latestState.filePath !== activeFilePath) return;
 
