@@ -57,7 +57,10 @@ select {
 
 .ProseMirror h1,
 .ProseMirror h2,
-.ProseMirror h3 {
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
   color: var(--color-ink);
   letter-spacing: 0;
   margin: var(--space-12) 0 var(--space-4);
@@ -76,6 +79,32 @@ select {
 .ProseMirror h3 {
   font-size: var(--text-doc-h3);
   line-height: 1.35;
+}
+
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
+  font-weight: 600;
+  margin-top: var(--space-8);
+}
+
+.ProseMirror h4 {
+  font-size: var(--text-doc-h4);
+  line-height: 1.4;
+}
+
+.ProseMirror h5 {
+  color: var(--color-ink-soft);
+  font-size: var(--text-doc-h5);
+  line-height: 1.45;
+}
+
+.ProseMirror h6 {
+  color: var(--color-ink-soft);
+  font-family: var(--font-ui);
+  font-size: var(--text-doc-h6);
+  line-height: 1.45;
+  text-transform: uppercase;
 }
 
 .ProseMirror ul,
