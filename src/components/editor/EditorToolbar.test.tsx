@@ -59,7 +59,7 @@ describe('EditorToolbar', () => {
 
     const { container } = render(<EditorToolbar editor={editor} />);
 
-    expect(container.firstElementChild).toHaveClass('h-[52px]');
+    expect(container.firstElementChild).toHaveClass('h-13');
   });
 
   it('centers the formatting controls within the top bar height', () => {

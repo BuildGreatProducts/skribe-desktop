@@ -51,7 +51,7 @@ export function AppShell({
       <div className="relative min-h-0 flex-1">
         {!hasSidebar ? (
           <div
-            className="absolute inset-x-0 top-0 z-20 h-[52px]"
+            className="absolute inset-x-0 top-0 z-20 h-13"
             aria-hidden="true"
             data-tauri-drag-region
           />

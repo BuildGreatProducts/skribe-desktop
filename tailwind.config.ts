@@ -49,6 +49,7 @@ const config: Config = {
         8: 'var(--space-8)',
         10: 'var(--space-10)',
         12: 'var(--space-12)',
+        13: 'var(--space-13)',
         16: 'var(--space-16)',
         20: 'var(--space-20)',
         24: 'var(--space-24)',

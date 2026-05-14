@@ -44,7 +44,7 @@ describe('AppShell', () => {
     const dragRegion = container.querySelector('[data-tauri-drag-region]');
 
     expect(dragRegion).toBeInTheDocument();
-    expect(dragRegion).toHaveClass('top-0', 'h-[52px]', 'z-20');
+    expect(dragRegion).toHaveClass('top-0', 'h-13', 'z-20');
   });
 
   it('mounts the sidebar at full width when opening a project from home', () => {

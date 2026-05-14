@@ -67,6 +67,8 @@ text-xs: 0.75rem
 text-sm: 0.875rem
 text-base: 1rem
 text-doc: 1.125rem
+text-doc-h6: 0.9375rem
+text-doc-h5: 1rem
 text-doc-h3: 1.375rem
 text-doc-h2: 1.625rem
 text-doc-h1: 2.125rem
@@ -83,6 +85,8 @@ The global body enables `kern`, `liga`, and `onum`. Letter spacing is normally `
 
 The editor default is 18px text with 1.7 line height, but users can choose 14, 16, 18, or 20px and line heights 1.5, 1.7, or 1.9. Design work should tolerate all of those settings without text overlap.
 
+`text-doc-h5` and `text-doc-h6` are intentionally smaller than base document body text (`text-doc`, 1.125rem). H5 is 1rem and H6 is 0.9375rem; both use `--color-ink-soft`, with H6 also using uppercase text. Use them for secondary headings styled as reduced-prominence labels, not primary structural headings.
+
 ## Spacing, Radius, Motion
 
 ```yaml
@@ -96,6 +100,7 @@ space-6: 1.5rem
 space-8: 2rem
 space-10: 2.5rem
 space-12: 3rem
+space-13: 3.25rem
 space-16: 4rem
 space-20: 5rem
 space-24: 6rem
