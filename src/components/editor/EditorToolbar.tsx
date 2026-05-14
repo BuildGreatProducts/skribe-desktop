@@ -75,10 +75,10 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
   ];
 
   return (
-    <div className="sticky top-0 z-10 border-b border-hairline bg-paper">
+    <div className="sticky top-0 z-10 h-[52px] border-b border-hairline bg-paper">
       <div className="absolute inset-0" aria-hidden="true" data-tauri-drag-region />
       <div
-        className="skribe-scrollbar pointer-events-none relative z-10 mx-auto flex w-full max-w-[44rem] items-center justify-center gap-4 overflow-x-auto px-6 py-2"
+        className="skribe-scrollbar pointer-events-none relative z-10 mx-auto flex h-full w-full max-w-[44rem] translate-y-[2px] items-center justify-center gap-4 overflow-x-auto px-6"
         role="toolbar"
         aria-label="Text formatting"
       >

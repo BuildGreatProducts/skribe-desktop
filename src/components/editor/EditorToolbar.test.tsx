@@ -54,6 +54,26 @@ describe('EditorToolbar', () => {
     vi.clearAllMocks();
   });
 
+  it('keeps the top bar tall enough for the fixed chrome icons', () => {
+    const { editor } = toolbarEditor();
+
+    const { container } = render(<EditorToolbar editor={editor} />);
+
+    expect(container.firstElementChild).toHaveClass('h-[52px]');
+  });
+
+  it('centers the formatting controls within the top bar height', () => {
+    const { editor } = toolbarEditor();
+
+    render(<EditorToolbar editor={editor} />);
+
+    expect(screen.getByRole('toolbar', { name: 'Text formatting' })).toHaveClass(
+      'h-full',
+      'items-center',
+      'translate-y-[2px]',
+    );
+  });
+
   it('toggles code blocks from the toolbar', () => {
     const { chain, editor, run } = toolbarEditor();
 
