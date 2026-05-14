@@ -13,6 +13,8 @@ type ToolbarControl = {
   run: () => void;
 };
 
+const headingLevels = [1, 2, 3, 4, 5, 6] as const;
+
 export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) {
   const [, setRenderVersion] = useState(0);
 
@@ -40,21 +42,11 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
       active: () => editor.isActive('italic'),
       run: () => editor.chain().focus().toggleItalic().run(),
     },
-    {
-      label: 'H1',
-      active: () => editor.isActive('heading', { level: 1 }),
-      run: () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
-    },
-    {
-      label: 'H2',
-      active: () => editor.isActive('heading', { level: 2 }),
-      run: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
-    },
-    {
-      label: 'H3',
-      active: () => editor.isActive('heading', { level: 3 }),
-      run: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
-    },
+    ...headingLevels.map((level) => ({
+      label: `H${level}`,
+      active: () => editor.isActive('heading', { level }),
+      run: () => editor.chain().focus().toggleHeading({ level }).run(),
+    })),
     {
       label: 'Quote',
       active: () => editor.isActive('blockquote'),
@@ -83,10 +75,10 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
   ];
 
   return (
-    <div className="sticky top-0 z-10 border-b border-hairline bg-paper">
+    <div className="sticky top-0 z-10 h-13 border-b border-hairline bg-paper">
       <div className="absolute inset-0" aria-hidden="true" data-tauri-drag-region />
       <div
-        className="skribe-scrollbar pointer-events-none relative z-10 mx-auto flex w-full max-w-[44rem] items-center justify-center gap-5 overflow-x-auto px-8 py-3"
+        className="skribe-scrollbar pointer-events-none relative z-10 mx-auto flex h-full w-full max-w-[44rem] translate-y-[2px] items-center justify-center gap-4 overflow-x-auto px-6"
         role="toolbar"
         aria-label="Text formatting"
       >
@@ -98,7 +90,7 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
             aria-pressed={control.active()}
             disabled={disabled}
             className={clsx(
-              'pointer-events-auto h-8 shrink-0 rounded-sm px-1 text-base text-chrome-text-soft transition hover:text-ink focus-visible:outline-offset-4 disabled:pointer-events-none disabled:opacity-40',
+              'pointer-events-auto h-7 shrink-0 rounded-sm px-0.5 text-sm text-chrome-text-soft transition hover:text-ink focus-visible:outline-offset-4 disabled:pointer-events-none disabled:opacity-40',
               control.active() && 'font-semibold text-ink',
             )}
             onMouseDown={(event) => event.preventDefault()}

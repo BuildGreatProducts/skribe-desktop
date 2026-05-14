@@ -38,6 +38,15 @@ describe('AppShell', () => {
     vi.clearAllMocks();
   });
 
+  it('adds a draggable top bar on the home screen', () => {
+    const { container } = render(<AppShell {...appShellProps()} />);
+
+    const dragRegion = container.querySelector('[data-tauri-drag-region]');
+
+    expect(dragRegion).toBeInTheDocument();
+    expect(dragRegion).toHaveClass('top-0', 'h-13', 'z-20');
+  });
+
   it('mounts the sidebar at full width when opening a project from home', () => {
     const { container, rerender } = render(<AppShell {...appShellProps()} />);
 

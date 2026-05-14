@@ -49,6 +49,13 @@ export function AppShell({
     <div className="flex h-full flex-col bg-paper text-ink">
       {banner}
       <div className="relative min-h-0 flex-1">
+        {!hasSidebar ? (
+          <div
+            className="absolute inset-x-0 top-0 z-20 h-13"
+            aria-hidden="true"
+            data-tauri-drag-region
+          />
+        ) : null}
         {hasSidebar ? (
           <div
             className="absolute top-2.5 z-30 flex items-center gap-2 transition-[left]"
