@@ -49,6 +49,15 @@ describe('AppShell', () => {
     expect(navigation).toHaveStyle({ width: '240px' });
   });
 
+  it('keeps a draggable top bar on the home screen', () => {
+    const { container } = render(<AppShell {...appShellProps()} />);
+
+    const dragRegions = container.querySelectorAll('[data-tauri-drag-region]');
+
+    expect(dragRegions).toHaveLength(1);
+    expect(dragRegions[0]).toHaveClass('h-[52px]');
+  });
+
   it('keeps the sidebar width transition for regular in-project toggles', () => {
     const { container, rerender } = render(
       <AppShell {...appShellProps(<div>Files</div>)} />,

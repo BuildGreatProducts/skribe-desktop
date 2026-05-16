@@ -56,6 +56,21 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
       run: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
     },
     {
+      label: 'H4',
+      active: () => editor.isActive('heading', { level: 4 }),
+      run: () => editor.chain().focus().toggleHeading({ level: 4 }).run(),
+    },
+    {
+      label: 'H5',
+      active: () => editor.isActive('heading', { level: 5 }),
+      run: () => editor.chain().focus().toggleHeading({ level: 5 }).run(),
+    },
+    {
+      label: 'H6',
+      active: () => editor.isActive('heading', { level: 6 }),
+      run: () => editor.chain().focus().toggleHeading({ level: 6 }).run(),
+    },
+    {
       label: 'Quote',
       active: () => editor.isActive('blockquote'),
       run: () => editor.chain().focus().toggleBlockquote().run(),

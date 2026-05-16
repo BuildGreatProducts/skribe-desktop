@@ -7,7 +7,7 @@ type MockChain = {
   focus: () => MockChain;
   toggleBold: () => MockChain;
   toggleItalic: () => MockChain;
-  toggleHeading: () => MockChain;
+  toggleHeading: (attributes?: { level: number }) => MockChain;
   toggleBlockquote: () => MockChain;
   toggleCodeBlock: () => MockChain;
   toggleBulletList: () => MockChain;
@@ -70,5 +70,16 @@ describe('EditorToolbar', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('offers lower-level heading controls', () => {
+    const { chain, editor } = toolbarEditor();
+
+    render(<EditorToolbar editor={editor} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'H6' }));
+
+    expect(chain.focus).toHaveBeenCalled();
+    expect(chain.toggleHeading).toHaveBeenCalledWith({ level: 6 });
   });
 });
