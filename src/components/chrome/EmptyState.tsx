@@ -17,11 +17,15 @@ export function EmptyState({ onOpenFolder, onOpenRecent }: EmptyStateProps) {
           alt=""
           className="mx-auto mb-6 h-36 w-auto object-contain"
         />
-        <h1 className="mb-3 font-editor text-display font-medium leading-tight tracking-[0] text-ink">Skribe</h1>
+        <h1 className="mb-3 font-editor text-display font-medium leading-tight tracking-[-0.04em] text-ink">Skribe</h1>
         <p className="mb-5 text-base font-normal text-chrome-text-soft">
           Writing finally lives where you build.
         </p>
-        <Button icon={<FolderOpen size={18} />} onClick={onOpenFolder}>
+        <Button
+          className="!rounded-full bg-black text-white hover:bg-[#1f1f1f]"
+          icon={<FolderOpen size={18} />}
+          onClick={onOpenFolder}
+        >
           Open folder
         </Button>
         {recentFolders.length > 0 ? (

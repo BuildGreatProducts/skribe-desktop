@@ -45,6 +45,49 @@ select {
   scrollbar-width: thin;
 }
 
+.claude-stream-complete-tick {
+  animation: skribe-complete-tick-pop 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.claude-stream-complete-tick svg {
+  animation: skribe-complete-tick-mark 420ms cubic-bezier(0.2, 0.8, 0.2, 1) 60ms both;
+  transform-origin: center;
+}
+
+@keyframes skribe-complete-tick-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes skribe-complete-tick-mark {
+  0% {
+    opacity: 0;
+    transform: scale(0.55) rotate(-10deg);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1.15) rotate(2deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
 .ProseMirror {
   min-height: 100%;
   border: 0;

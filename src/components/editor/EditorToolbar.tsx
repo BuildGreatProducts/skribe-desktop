@@ -72,6 +72,11 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
       active: () => editor.isActive('link'),
       run: () => setLink(editor),
     },
+    {
+      label: 'Break',
+      active: () => false,
+      run: () => insertHorizontalRule(editor),
+    },
   ];
 
   return (
@@ -102,6 +107,23 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
       </div>
     </div>
   );
+}
+
+function insertHorizontalRule(editor: TiptapEditor) {
+  const { selection } = editor.state;
+  if (selection.empty) {
+    const { $from } = selection;
+    const currentBlockHasText =
+      $from.parent.isTextblock && $from.parent.textContent.length > 0;
+    const cursorIsInsideTextBlock = $from.parentOffset < $from.parent.content.size;
+
+    if (currentBlockHasText && cursorIsInsideTextBlock) {
+      editor.chain().focus().setTextSelection($from.end()).setHorizontalRule().run();
+      return;
+    }
+  }
+
+  editor.chain().focus().setHorizontalRule().run();
 }
 
 function setLink(editor: TiptapEditor) {

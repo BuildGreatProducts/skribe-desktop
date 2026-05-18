@@ -12,15 +12,19 @@ type MockChain = {
   toggleCodeBlock: () => MockChain;
   toggleBulletList: () => MockChain;
   toggleOrderedList: () => MockChain;
+  setTextSelection: (position: number) => MockChain;
+  setHorizontalRule: () => MockChain;
   run: () => boolean;
 };
 
 function toolbarEditor({
   activeHeadingLevel,
   activeNodes = [],
+  selection = toolbarSelection(),
 }: {
   activeHeadingLevel?: number;
   activeNodes?: string[];
+  selection?: ReturnType<typeof toolbarSelection>;
 } = {}) {
   const run = vi.fn(() => true);
   const chain: MockChain = {
@@ -32,6 +36,8 @@ function toolbarEditor({
     toggleCodeBlock: vi.fn(() => chain),
     toggleBulletList: vi.fn(() => chain),
     toggleOrderedList: vi.fn(() => chain),
+    setTextSelection: vi.fn(() => chain),
+    setHorizontalRule: vi.fn(() => chain),
     run,
   };
   const editor = {
@@ -43,9 +49,37 @@ function toolbarEditor({
     }),
     on: vi.fn(),
     off: vi.fn(),
+    state: { selection },
   };
 
   return { chain, editor: editor as unknown as TiptapEditor, run };
+}
+
+function toolbarSelection({
+  empty = true,
+  parentOffset = 0,
+  textContent = '',
+  endPosition = 1,
+}: {
+  empty?: boolean;
+  parentOffset?: number;
+  textContent?: string;
+  endPosition?: number;
+} = {}) {
+  return {
+    empty,
+    $from: {
+      parentOffset,
+      parent: {
+        isTextblock: true,
+        textContent,
+        content: {
+          size: textContent.length,
+        },
+      },
+      end: vi.fn(() => endPosition),
+    },
+  };
 }
 
 describe('EditorToolbar', () => {
@@ -122,5 +156,40 @@ describe('EditorToolbar', () => {
       'aria-pressed',
       'false',
     );
+  });
+
+  it('inserts a horizontal rule from the break control', () => {
+    const { chain, editor, run } = toolbarEditor();
+
+    render(<EditorToolbar editor={editor} />);
+
+    const breakButton = screen.getByRole('button', { name: 'Break' });
+    expect(breakButton).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(breakButton);
+
+    expect(chain.focus).toHaveBeenCalled();
+    expect(chain.setHorizontalRule).toHaveBeenCalled();
+    expect(chain.setTextSelection).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalled();
+  });
+
+  it('places the horizontal rule below the current text block when the cursor is inside text', () => {
+    const { chain, editor, run } = toolbarEditor({
+      selection: toolbarSelection({
+        parentOffset: 5,
+        textContent: 'Opening paragraph',
+        endPosition: 18,
+      }),
+    });
+
+    render(<EditorToolbar editor={editor} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Break' }));
+
+    expect(chain.focus).toHaveBeenCalled();
+    expect(chain.setTextSelection).toHaveBeenCalledWith(18);
+    expect(chain.setHorizontalRule).toHaveBeenCalled();
+    expect(run).toHaveBeenCalled();
   });
 });
