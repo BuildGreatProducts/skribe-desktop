@@ -416,6 +416,30 @@ describe('AIInputBar selection collapse behavior', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows a stop control while an AI request is streaming', () => {
+    useEditorStore.setState({ filePath, highlightedSelection: null });
+    const cancel = vi.fn(async () => undefined);
+    useAiStore.setState({
+      status: 'streaming',
+      promptFilePath: filePath,
+      cancel,
+    });
+    render(<AIInputBar />);
+
+    const stopButton = screen.getByRole('button', { name: 'Stop AI request' });
+    expect(stopButton).toHaveClass('!bg-black');
+    expect(
+      screen.queryByRole('button', { name: 'Submit AI prompt' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Cancel AI request' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(stopButton);
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
   it('does not duplicate text while the user types into the prompt', () => {
     useEditorStore.setState({ filePath, highlightedSelection: null });
     const submitPrompt = vi.fn(async () => undefined);

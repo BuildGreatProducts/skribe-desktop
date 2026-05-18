@@ -1,8 +1,8 @@
-import { XIcon } from '@phosphor-icons/react';
+import { CheckIcon, XIcon } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 
 export const CLAUDE_STREAM_PLACEHOLDERS = [
-  'Writing...',
+  'Thinking...',
   'Editing...',
   'Refining...',
   'Researching...',
@@ -10,6 +10,13 @@ export const CLAUDE_STREAM_PLACEHOLDERS = [
 export const CLAUDE_STREAM_PLACEHOLDER_TYPE_MS = 70;
 export const CLAUDE_STREAM_PLACEHOLDER_HOLD_MS = 1200;
 export const CLAUDE_STREAM_DISMISS_MS = 220;
+export const CLAUDE_STREAM_WRITING_PLACEHOLDERS = [
+  'Writing...',
+  'Scrawling...',
+  'Scribbling...',
+] as const;
+export const CLAUDE_STREAM_WRITING_LABEL = CLAUDE_STREAM_WRITING_PLACEHOLDERS[0];
+export const CLAUDE_STREAM_COMPLETE_LABEL = 'Complete';
 
 type ClaudeStreamPreviewProps = {
   text: string;
@@ -30,7 +37,11 @@ export function ClaudeStreamPreview({
   const [typedCharacterCount, setTypedCharacterCount] = useState(0);
   const [dismissing, setDismissing] = useState(false);
   const dismissTimerRef = useRef<number | null>(null);
-  const currentPlaceholder = CLAUDE_STREAM_PLACEHOLDERS[placeholderIndex];
+  const activePlaceholders = hasContent
+    ? CLAUDE_STREAM_WRITING_PLACEHOLDERS
+    : CLAUDE_STREAM_PLACEHOLDERS;
+  const currentPlaceholder =
+    activePlaceholders[placeholderIndex % activePlaceholders.length];
 
   useEffect(() => {
     if (visible) {
@@ -49,7 +60,12 @@ export function ClaudeStreamPreview({
   }, []);
 
   useEffect(() => {
-    if (!visible || hasContent || complete) {
+    setPlaceholderIndex(0);
+    setTypedCharacterCount(0);
+  }, [hasContent]);
+
+  useEffect(() => {
+    if (!visible || complete) {
       setPlaceholderIndex(0);
       setTypedCharacterCount(0);
       return;
@@ -63,7 +79,7 @@ export function ClaudeStreamPreview({
           return;
         }
 
-        setPlaceholderIndex((index) => (index + 1) % CLAUDE_STREAM_PLACEHOLDERS.length);
+        setPlaceholderIndex((index) => (index + 1) % activePlaceholders.length);
         setTypedCharacterCount(0);
       },
       typedCharacterCount < placeholderLength
@@ -72,11 +88,19 @@ export function ClaudeStreamPreview({
     );
 
     return () => window.clearTimeout(timeout);
-  }, [complete, currentPlaceholder, hasContent, typedCharacterCount, visible]);
+  }, [
+    activePlaceholders.length,
+    complete,
+    currentPlaceholder,
+    typedCharacterCount,
+    visible,
+  ]);
 
   if (!visible) return null;
 
-  const displayText = hasContent ? text : currentPlaceholder.slice(0, typedCharacterCount);
+  const displayText = complete
+    ? CLAUDE_STREAM_COMPLETE_LABEL
+    : currentPlaceholder.slice(0, typedCharacterCount);
 
   function dismiss() {
     if (dismissing) return;
@@ -90,28 +114,33 @@ export function ClaudeStreamPreview({
 
   return (
     <div
-      aria-label={!hasContent ? currentPlaceholder : undefined}
+      aria-label={complete ? CLAUDE_STREAM_COMPLETE_LABEL : currentPlaceholder}
       aria-live="polite"
       className={`mx-auto flex max-h-44 w-[min(34rem,calc(100%-4rem))] items-start gap-3 overflow-hidden rounded-t-lg rounded-b-none border border-b-0 border-hairline bg-white/75 p-3 text-ink shadow-modal backdrop-blur-xl transition-[transform,opacity] duration-200 ease-in ${
         dismissing ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'
       }`}
       role="status"
     >
-      {!complete ? (
+      {complete ? (
+        <span
+          aria-hidden="true"
+          className="claude-stream-complete-tick mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center text-success"
+        >
+          <CheckIcon size={17} weight="bold" />
+        </span>
+      ) : (
         <span
           aria-hidden="true"
           className="mt-0.5 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-accent/25 border-t-accent"
         />
-      ) : null}
+      )}
       <div className="skribe-scrollbar max-h-36 min-h-0 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">
-        {hasContent ? (
-          <span>{displayText}</span>
-        ) : (
-          <span aria-hidden="true" className="block min-h-[1.375rem]">
-            {displayText}
+        <span aria-hidden="true" className="block min-h-[1.375rem]">
+          {displayText}
+          {!complete ? (
             <span className="ml-0.5 inline-block h-4 w-px translate-y-0.5 animate-pulse bg-accent" />
-          </span>
-        )}
+          ) : null}
+        </span>
       </div>
       {complete ? (
         <button

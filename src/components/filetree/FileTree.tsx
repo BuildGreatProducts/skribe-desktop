@@ -2,7 +2,6 @@ import {
   CaretDownIcon,
   CaretRightIcon,
   DotsThree,
-  EyeSlashIcon,
   FolderIcon,
 } from '@phosphor-icons/react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -18,12 +17,17 @@ import {
   FILE_ROW_HEIGHT,
   FOLDER_ROW_HEIGHT,
   buildFileTreeRows,
+  defaultCollapsedFolderPaths,
   folderPathsForEntries,
+  folderPathsForFiles,
   type FileTreeRow,
 } from './fileTreeRows';
 
+const FILE_TREE_INDENT_PX = 16;
+
 export function FileTree() {
   const parentRef = useRef<HTMLDivElement | null>(null);
+  const folderRootPath = useFolderStore((state) => state.path);
   const files = useFolderStore((state) => state.files);
   const folders = useFolderStore((state) => state.folders);
   const loading = useFolderStore((state) => state.loading);
@@ -42,26 +46,16 @@ export function FileTree() {
   const [pendingDelete, setPendingDelete] = useState<MarkdownFile | null>(null);
   const [pendingFolderDelete, setPendingFolderDelete] = useState<MarkdownFolder | null>(null);
   const [openMenuPath, setOpenMenuPath] = useState<string | null>(null);
-  const [showEmptyFolders, setShowEmptyFolders] = useState(false);
   const [collapsedFolderPaths, setCollapsedFolderPaths] = useState<Set<string>>(() => new Set());
+  const knownFolderPathsRef = useRef<Set<string>>(new Set());
+  const autoCollapsedFolderPathsRef = useRef<Set<string>>(new Set());
+  const previousFolderRootPathRef = useRef<string | null>(null);
   const runningPromptFilePath = ['submitting', 'streaming', 'awaiting_clarification'].includes(aiStatus)
     ? promptFilePath
     : null;
-  const allRows = useMemo(
+  const rows = useMemo(
     () => buildFileTreeRows(files, collapsedFolderPaths, folders),
     [collapsedFolderPaths, files, folders],
-  );
-  const emptyFolderRows = useMemo(
-    () =>
-      allRows.filter(
-        (row): row is Extract<FileTreeRow, { type: 'folder' }> =>
-          row.type === 'folder' && row.fileCount === 0,
-      ),
-    [allRows],
-  );
-  const rows = useMemo(
-    () => allRows.filter((row) => row.type !== 'folder' || row.fileCount > 0),
-    [allRows],
   );
   const visibleFiles = useMemo(
     () => rows.filter((row): row is Extract<FileTreeRow, { type: 'file' }> => row.type === 'file'),
@@ -70,19 +64,63 @@ export function FileTree() {
 
   useEffect(() => {
     const currentFolderPaths = folderPathsForEntries(files, folders);
-    setCollapsedFolderPaths((current) => {
-      let changed = false;
-      const next = new Set<string>();
-      current.forEach((folderPath) => {
-        if (currentFolderPaths.has(folderPath)) {
-          next.add(folderPath);
-        } else {
-          changed = true;
-        }
-      });
-      return changed ? next : current;
+    const foldersWithMarkdownFiles = folderPathsForFiles(files);
+    const rootChanged = previousFolderRootPathRef.current !== folderRootPath;
+    const previousKnownFolderPaths = rootChanged
+      ? new Set<string>()
+      : knownFolderPathsRef.current;
+    const previousAutoCollapsedFolderPaths = rootChanged
+      ? new Set<string>()
+      : autoCollapsedFolderPathsRef.current;
+    const nextDefaultCollapsedFolderPaths = defaultCollapsedFolderPaths(files, folders);
+    const newlyDiscoveredDefaultCollapsedFolderPaths = new Set(
+      [...nextDefaultCollapsedFolderPaths].filter(
+        (folderPath) => !previousKnownFolderPaths.has(folderPath),
+      ),
+    );
+
+    let changed = rootChanged && collapsedFolderPaths.size > 0;
+    const nextCollapsedFolderPaths = new Set<string>();
+    const nextAutoCollapsedFolderPaths = new Set<string>();
+    const currentCollapsedFolderPaths = rootChanged
+      ? new Set<string>()
+      : collapsedFolderPaths;
+
+    currentCollapsedFolderPaths.forEach((folderPath) => {
+      if (!currentFolderPaths.has(folderPath)) {
+        changed = true;
+        return;
+      }
+
+      if (
+        previousAutoCollapsedFolderPaths.has(folderPath) &&
+        foldersWithMarkdownFiles.has(folderPath)
+      ) {
+        changed = true;
+        return;
+      }
+
+      nextCollapsedFolderPaths.add(folderPath);
+      if (
+        previousAutoCollapsedFolderPaths.has(folderPath) &&
+        nextDefaultCollapsedFolderPaths.has(folderPath)
+      ) {
+        nextAutoCollapsedFolderPaths.add(folderPath);
+      }
     });
-  }, [files, folders]);
+
+    for (const folderPath of newlyDiscoveredDefaultCollapsedFolderPaths) {
+      if (nextCollapsedFolderPaths.has(folderPath)) continue;
+      nextCollapsedFolderPaths.add(folderPath);
+      nextAutoCollapsedFolderPaths.add(folderPath);
+      changed = true;
+    }
+
+    autoCollapsedFolderPathsRef.current = nextAutoCollapsedFolderPaths;
+    if (changed) setCollapsedFolderPaths(nextCollapsedFolderPaths);
+    knownFolderPathsRef.current = currentFolderPaths;
+    previousFolderRootPathRef.current = folderRootPath;
+  }, [collapsedFolderPaths, files, folderRootPath, folders]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -121,6 +159,7 @@ export function FileTree() {
   }
 
   function toggleFolder(folderPath: string) {
+    autoCollapsedFolderPathsRef.current.delete(folderPath);
     setCollapsedFolderPaths((current) => {
       const next = new Set(current);
       if (next.has(folderPath)) {
@@ -130,11 +169,6 @@ export function FileTree() {
       }
       return next;
     });
-  }
-
-  function toggleEmptyFolders() {
-    if (showEmptyFolders) setOpenMenuPath(null);
-    setShowEmptyFolders((visible) => !visible);
   }
 
   return (
@@ -173,6 +207,7 @@ export function FileTree() {
                   className="absolute left-0 top-0 w-full"
                   style={{
                     transform: `translateY(${item.start}px)`,
+                    paddingLeft: row.depth * FILE_TREE_INDENT_PX,
                     zIndex:
                       (row.type === 'file' && openMenuPath === row.file.path) ||
                       (row.type === 'folder' && openMenuPath === row.key)
@@ -196,7 +231,7 @@ export function FileTree() {
                       aiRunning={runningPromptFilePath === row.file.path}
                       dirty={row.file.path === activeFilePath && isDirty}
                       menuOpen={openMenuPath === row.file.path}
-                      showParentFolder={!row.folderPath}
+                      showParentFolder={false}
                       onOpen={(selected) => void open(selected)}
                       onMenuOpenChange={(open) => setOpenMenuPath(open ? row.file.path : null)}
                       onRename={(selected, name) => void renameFile(selected.path, name)}
@@ -207,48 +242,6 @@ export function FileTree() {
               );
             })}
           </div>
-          {emptyFolderRows.length > 0 ? (
-            <div className="mt-2 border-t border-hairline pt-2">
-              <button
-                type="button"
-                aria-expanded={showEmptyFolders}
-                className="mx-1 flex h-8 w-[calc(100%-0.5rem)] items-center justify-between rounded-sm px-2 text-left text-xs font-medium text-chrome-text-soft transition hover:bg-highlight hover:text-chrome-text"
-                onClick={toggleEmptyFolders}
-              >
-                <span className="inline-flex min-w-0 items-center gap-2">
-                  <EyeSlashIcon size={14} weight="bold" className="shrink-0" />
-                  <span className="truncate">
-                    {showEmptyFolders ? 'Hide folders' : 'Show all folders'}
-                  </span>
-                </span>
-                <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full border border-hairline bg-paper px-1 text-[10px] leading-none">
-                  {emptyFolderRows.length}
-                </span>
-              </button>
-              {showEmptyFolders ? (
-                <div className="mt-1">
-                  {emptyFolderRows.map((row) => (
-                    <div
-                      key={row.key}
-                      className={clsx(
-                        'relative',
-                        openMenuPath === row.key && 'z-30',
-                      )}
-                    >
-                      <FolderHeading
-                        row={row}
-                        menuOpen={openMenuPath === row.key}
-                        onToggle={() => toggleFolder(row.folderPath)}
-                        onMenuOpenChange={(open) => setOpenMenuPath(open ? row.key : null)}
-                        onRename={(folder, name) => void handleFolderRename(folder, name)}
-                        onDelete={setPendingFolderDelete}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       )}
       <ConfirmDeleteModal

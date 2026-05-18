@@ -6,6 +6,7 @@ import {
   ImageIcon,
   PaperPlaneTiltIcon,
   PlusIcon,
+  StopIcon,
   XIcon,
 } from '@phosphor-icons/react';
 import { isTauri } from '@tauri-apps/api/core';
@@ -881,11 +882,10 @@ export function AIInputBar() {
                 >
                   {status === 'streaming' ? (
                     <Button
-                      aria-label="Cancel AI request"
-                      variant="secondary"
-                      className="h-10 w-10 rounded-full bg-paper/50 px-0"
+                      aria-label="Stop AI request"
+                      className="!h-10 !w-10 !min-w-[2.5rem] !max-w-[2.5rem] shrink-0 !rounded-full !bg-black !p-0 !text-white hover:!bg-[#1f1f1f]"
                       onClick={() => void cancel()}
-                      icon={<XIcon size={17} weight="bold" />}
+                      icon={<StopIcon size={15} weight="fill" />}
                     />
                   ) : disabledReason ? (
                     <Tooltip label={disabledReason}>
