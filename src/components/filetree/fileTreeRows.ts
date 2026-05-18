@@ -109,8 +109,8 @@ function buildFolderTree(files: MarkdownFile[], folders: MarkdownFolder[]): Root
   };
 
   for (const folder of folders) {
-    const folderPath = folder.relativePath.trim();
-    if (!folderPath) continue;
+    const folderPath = folder.relativePath;
+    if (folderPath === '') continue;
     ensureFolderNode(root, folderPath).folder = folder;
   }
 

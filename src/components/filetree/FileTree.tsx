@@ -79,50 +79,48 @@ export function FileTree() {
       ),
     );
 
-    setCollapsedFolderPaths((current) => {
-      let changed = false;
-      const next = new Set<string>();
-      const nextAutoCollapsedFolderPaths = new Set<string>();
-      const currentCollapsedFolderPaths = rootChanged ? new Set<string>() : current;
-      if (rootChanged && current.size > 0) changed = true;
+    let changed = rootChanged && collapsedFolderPaths.size > 0;
+    const nextCollapsedFolderPaths = new Set<string>();
+    const nextAutoCollapsedFolderPaths = new Set<string>();
+    const currentCollapsedFolderPaths = rootChanged
+      ? new Set<string>()
+      : collapsedFolderPaths;
 
-      currentCollapsedFolderPaths.forEach((folderPath) => {
-        if (!currentFolderPaths.has(folderPath)) {
-          changed = true;
-          return;
-        }
-
-        if (
-          previousAutoCollapsedFolderPaths.has(folderPath) &&
-          foldersWithMarkdownFiles.has(folderPath)
-        ) {
-          changed = true;
-          return;
-        }
-
-        next.add(folderPath);
-        if (
-          previousAutoCollapsedFolderPaths.has(folderPath) &&
-          nextDefaultCollapsedFolderPaths.has(folderPath)
-        ) {
-          nextAutoCollapsedFolderPaths.add(folderPath);
-        }
-      });
-
-      for (const folderPath of newlyDiscoveredDefaultCollapsedFolderPaths) {
-        if (next.has(folderPath)) continue;
-        next.add(folderPath);
-        nextAutoCollapsedFolderPaths.add(folderPath);
+    currentCollapsedFolderPaths.forEach((folderPath) => {
+      if (!currentFolderPaths.has(folderPath)) {
         changed = true;
+        return;
       }
 
-      autoCollapsedFolderPathsRef.current = nextAutoCollapsedFolderPaths;
-      return changed ? next : current;
+      if (
+        previousAutoCollapsedFolderPaths.has(folderPath) &&
+        foldersWithMarkdownFiles.has(folderPath)
+      ) {
+        changed = true;
+        return;
+      }
+
+      nextCollapsedFolderPaths.add(folderPath);
+      if (
+        previousAutoCollapsedFolderPaths.has(folderPath) &&
+        nextDefaultCollapsedFolderPaths.has(folderPath)
+      ) {
+        nextAutoCollapsedFolderPaths.add(folderPath);
+      }
     });
 
+    for (const folderPath of newlyDiscoveredDefaultCollapsedFolderPaths) {
+      if (nextCollapsedFolderPaths.has(folderPath)) continue;
+      nextCollapsedFolderPaths.add(folderPath);
+      nextAutoCollapsedFolderPaths.add(folderPath);
+      changed = true;
+    }
+
+    autoCollapsedFolderPathsRef.current = nextAutoCollapsedFolderPaths;
+    if (changed) setCollapsedFolderPaths(nextCollapsedFolderPaths);
     knownFolderPathsRef.current = currentFolderPaths;
     previousFolderRootPathRef.current = folderRootPath;
-  }, [files, folderRootPath, folders]);
+  }, [collapsedFolderPaths, files, folderRootPath, folders]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,

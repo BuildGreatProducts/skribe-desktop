@@ -178,6 +178,27 @@ describe('buildFileTreeRows', () => {
     ]);
   });
 
+  it('keeps folder relative paths exact when matching nested files', () => {
+    const files = [markdownFile('drafts /Scene.md')];
+    const folders = [markdownFolder('drafts ')];
+
+    expect(buildFileTreeRows(files, new Set(), folders)).toMatchObject([
+      {
+        type: 'folder',
+        folderPath: 'drafts ',
+        folder: folders[0],
+        fileCount: 1,
+        depth: 0,
+      },
+      {
+        type: 'file',
+        file: { relativePath: 'drafts /Scene.md' },
+        folderPath: 'drafts ',
+        depth: 1,
+      },
+    ]);
+  });
+
   it('creates synthetic ancestor rows for nested files when folder entries are missing', () => {
     const files = [markdownFile('drafts/chapter-1/Scene.md')];
 
