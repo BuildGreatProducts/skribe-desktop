@@ -1,4 +1,6 @@
 import {
+  ArrowUUpLeftIcon,
+  ArrowUUpRightIcon,
   BookOpenTextIcon,
   FolderPlusIcon,
   GearIcon,
@@ -7,6 +9,7 @@ import {
   SidebarSimpleIcon,
 } from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
+import { useEditorHistoryStore } from '../../stores/editorHistoryStore';
 import { Button } from '../ui';
 
 type AppShellProps = {
@@ -44,6 +47,11 @@ export function AppShell({
   const collapseButtonLeft = sidebarCollapsed ? 84 : expandedSidebarWidth + 12;
   const iconButtonClass =
     'h-8 w-8 border-0 bg-transparent px-0 text-chrome-text-soft shadow-none hover:!bg-transparent hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+  const canUndo = useEditorHistoryStore((state) => state.canUndo);
+  const canRedo = useEditorHistoryStore((state) => state.canRedo);
+  const historyDisabled = useEditorHistoryStore((state) => state.disabled);
+  const undo = useEditorHistoryStore((state) => state.undo);
+  const redo = useEditorHistoryStore((state) => state.redo);
 
   return (
     <div className="flex h-full flex-col bg-paper text-ink">
@@ -84,6 +92,22 @@ export function AppShell({
           </div>
         ) : null}
         <div className="absolute right-3 top-2.5 z-30 flex items-center gap-2">
+          <Button
+            aria-label="Undo"
+            variant="secondary"
+            className={iconButtonClass}
+            disabled={historyDisabled || !canUndo}
+            onClick={undo}
+            icon={<ArrowUUpLeftIcon size={17} weight="bold" />}
+          />
+          <Button
+            aria-label="Redo"
+            variant="secondary"
+            className={iconButtonClass}
+            disabled={historyDisabled || !canRedo}
+            onClick={redo}
+            icon={<ArrowUUpRightIcon size={17} weight="bold" />}
+          />
           <Button
             aria-label="Project writing instructions"
             variant="secondary"
