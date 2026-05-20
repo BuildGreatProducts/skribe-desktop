@@ -83,7 +83,7 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
     <div className="sticky top-0 z-10 h-13 border-b border-hairline bg-paper">
       <div className="absolute inset-0" aria-hidden="true" data-tauri-drag-region />
       <div
-        className="skribe-scrollbar pointer-events-none relative z-10 mx-auto flex h-full w-full max-w-[44rem] translate-y-[2px] items-center justify-center gap-4 overflow-x-auto px-6"
+        className="pointer-events-none relative z-10 mx-auto flex h-full w-max max-w-full translate-y-[2px] items-center justify-center gap-4 px-6"
         role="toolbar"
         aria-label="Text formatting"
       >

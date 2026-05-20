@@ -5,8 +5,8 @@
 - Confirm `npm run typecheck`, `npm run lint`, `npm test`, `cargo test`, and `cargo clippy -- -D warnings` pass.
 - Confirm `npm run tauri build` creates `Skribe.app`.
 - Replace the updater public key in `src-tauri/tauri.conf.json`.
-- Configure `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` in CI.
-- Configure Apple notarization secrets in CI.
+- Follow [docs/release-signing.md](docs/release-signing.md): Developer ID cert, GitHub secrets, notarized DMG.
+- Configure `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` in CI (optional until auto-update ships).
 - Run a real-folder AI test with Claude Code installed.
 - Verify app launch, folder open, file CRUD, autosave, external edit handling, settings persistence, and AI cancel.
 
