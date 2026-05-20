@@ -111,6 +111,7 @@ pub fn acp_start(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn acp_send_prompt(
     session_id: String,
     prompt: String,
