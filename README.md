@@ -31,7 +31,7 @@ For a production `.app` bundle:
 npm run tauri build
 ```
 
-The local build target is `Skribe.app`. Signed DMG and updater artifacts are produced by the release workflow once Apple and Tauri signing secrets are configured.
+The local build target is `Skribe.app`. **Do not distribute that build to others** — macOS will show “damaged and can’t be opened.” Use a signed, notarized DMG from GitHub Releases instead. Setup: [docs/release-signing.md](docs/release-signing.md).
 
 ## Verification
 

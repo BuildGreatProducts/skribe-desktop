@@ -49,7 +49,10 @@
     ],
     "category": "Productivity",
     "shortDescription": "A markdown writing app for people who build with AI.",
-    "longDescription": "Skribe opens a local markdown folder and lets Claude Code stream editorial edits into the active document."
+    "longDescription": "Skribe opens a local markdown folder and lets Claude Code stream editorial edits into the active document.",
+    "macOS": {
+      "hardenedRuntime": true
+    }
   },
   "plugins": {
     "updater": {
