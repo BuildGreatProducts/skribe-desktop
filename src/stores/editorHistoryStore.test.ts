@@ -1,9 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useEditorHistoryStore } from './editorHistoryStore';
 
+const editorHistoryStoreBaseline = {
+  canUndo: false,
+  canRedo: false,
+  disabled: true,
+} as const;
+
 describe('editorHistoryStore', () => {
   afterEach(() => {
     useEditorHistoryStore.getState().clear();
+    useEditorHistoryStore.setState(editorHistoryStoreBaseline);
   });
 
   it('clears availability without forcing disabled', () => {
