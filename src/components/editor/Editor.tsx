@@ -1,6 +1,10 @@
 import { EditorContent, useEditor, type Editor as TiptapEditor } from '@tiptap/react';
-import { useEffect, useRef, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useRef, type MutableRefObject } from 'react';
 import { useAiStore } from '../../stores/aiStore';
+import {
+  setEditorHistoryAvailability,
+  useEditorHistoryStore,
+} from '../../stores/editorHistoryStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import type { AiError, HighlightedTextSelection } from '../../types';
@@ -24,6 +28,9 @@ export function Editor() {
   const markAiError = useAiStore((state) => state.markError);
   const lastStream = useRef('');
   const beforeAi = useRef<string | null>(null);
+  const performUndoRef = useRef<() => void>(() => {});
+  const performRedoRef = useRef<() => void>(() => {});
+  const historyDisabled = aiStatus === 'streaming' && promptFilePath === filePath;
 
   const editor = useEditor({
     extensions,
@@ -39,16 +46,23 @@ export function Editor() {
           void saveNow();
           return true;
         }
-        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z' && beforeAi.current) {
-          event.preventDefault();
-          if (editor) {
-            const restored = trySetMarkdown(editor, beforeAi.current, true);
-            if (restored) {
-              setContent(beforeAi.current);
-              beforeAi.current = null;
-            }
+        if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
+          if (beforeAi.current || editor?.can().undo()) {
+            event.preventDefault();
+            performUndoRef.current();
+            return true;
           }
-          return true;
+        }
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          event.shiftKey &&
+          event.key.toLowerCase() === 'z'
+        ) {
+          if (editor && !beforeAi.current && editor.can().redo()) {
+            event.preventDefault();
+            performRedoRef.current();
+            return true;
+          }
         }
         return false;
       },
@@ -60,6 +74,9 @@ export function Editor() {
         aiState.promptFilePath === useEditorStore.getState().filePath
       ) {
         return;
+      }
+      if (beforeAi.current) {
+        beforeAi.current = null;
       }
       setContent(editorToMarkdown(editor));
     },
@@ -82,11 +99,74 @@ export function Editor() {
     },
   });
 
+  const refreshHistory = useCallback((activeEditor: TiptapEditor) => {
+    const canUndo = beforeAi.current !== null || activeEditor.can().undo();
+    const canRedo = beforeAi.current === null && activeEditor.can().redo();
+    setEditorHistoryAvailability(canUndo, canRedo);
+  }, []);
+
+  const performUndo = useCallback(() => {
+    if (!editor) return;
+    if (beforeAi.current) {
+      const restored = trySetMarkdown(editor, beforeAi.current, true);
+      if (restored) {
+        setContent(beforeAi.current);
+        beforeAi.current = null;
+        refreshHistory(editor);
+      }
+      return;
+    }
+    editor.chain().focus().undo().run();
+    refreshHistory(editor);
+  }, [editor, refreshHistory, setContent]);
+
+  const performRedo = useCallback(() => {
+    if (!editor || beforeAi.current) return;
+    editor.chain().focus().redo().run();
+    refreshHistory(editor);
+  }, [editor, refreshHistory]);
+
+  useEffect(() => {
+    performUndoRef.current = performUndo;
+    performRedoRef.current = performRedo;
+  }, [performRedo, performUndo]);
+
+  useEffect(() => {
+    if (!editor || !filePath) {
+      useEditorHistoryStore.getState().setDisabled(true);
+      useEditorHistoryStore.getState().clear();
+      return undefined;
+    }
+
+    const refresh = () => refreshHistory(editor);
+    useEditorHistoryStore.getState().register({
+      undo: performUndo,
+      redo: performRedo,
+      refresh,
+    });
+    useEditorHistoryStore.getState().setDisabled(historyDisabled);
+
+    refresh();
+    editor.on('transaction', refresh);
+    editor.on('selectionUpdate', refresh);
+
+    return () => {
+      editor.off('transaction', refresh);
+      editor.off('selectionUpdate', refresh);
+      useEditorHistoryStore.getState().clear();
+    };
+  }, [editor, filePath, performRedo, performUndo, refreshHistory]);
+
+  useEffect(() => {
+    useEditorHistoryStore.getState().setDisabled(historyDisabled);
+  }, [historyDisabled]);
+
   useEffect(() => {
     if (!editor || !filePath) return;
     setMarkdown(editor, content, false);
     beforeAi.current = null;
     lastStream.current = '';
+    refreshHistory(editor);
     // Run only when a new document becomes active; live edits flow through Tiptap updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, filePath]);
@@ -94,6 +174,7 @@ export function Editor() {
   useEffect(() => {
     if (!editor || aiStatus !== 'streaming' || filePath !== promptFilePath) return;
     if (!beforeAi.current) beforeAi.current = content;
+    refreshHistory(editor);
     if (!shouldApplyStream(lastStream.current, partialResponse)) return;
     if (promptTarget.type === 'selection') return;
     if (trySetMarkdown(editor, partialResponse, false)) {
@@ -105,8 +186,9 @@ export function Editor() {
     if (aiStatus === 'error' || (aiStatus === 'idle' && !streamComplete)) {
       beforeAi.current = null;
       lastStream.current = '';
+      if (editor) refreshHistory(editor);
     }
-  }, [aiStatus, streamComplete]);
+  }, [aiStatus, editor, refreshHistory, streamComplete]);
 
   useEffect(() => {
     if (!editor || aiStatus === 'streaming' || !streamComplete) return;
