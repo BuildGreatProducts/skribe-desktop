@@ -21,6 +21,24 @@ export function buildMarkedDocument(pos: number): string | null {
   const { state } = editor;
   const clampedPos = Math.max(0, Math.min(pos, state.doc.content.size));
 
+  // Guard against collisions: if the document already contains the sentinel
+  // string we'd inject (e.g. a user pasted in a previous marked document or
+  // happens to be writing about this app), injecting another occurrence would
+  // make the downstream splice ambiguous. Bail out so the caller can surface
+  // an explicit error rather than silently corrupting the prompt.
+  const existingText = state.doc.textBetween(
+    0,
+    state.doc.content.size,
+    '\n',
+    '\n',
+  );
+  if (existingText.includes(INSERT_SENTINEL)) {
+    console.warn(
+      'Aborting marked-document build: document already contains the insertion sentinel.',
+    );
+    return null;
+  }
+
   try {
     const tr = state.tr.insertText(MARKER_BLOCK, clampedPos);
     const storage = editor.storage as unknown as {

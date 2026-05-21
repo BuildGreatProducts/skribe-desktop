@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSkribePrompt } from '../src/prompts.js';
+import { INSERT_SENTINEL, buildSkribePrompt } from '../src/prompts.js';
 
 const basePrompt = {
   prompt: 'make it warmer',
@@ -120,13 +120,13 @@ describe('buildSkribePrompt', () => {
   });
 
   it('asks for splice-only Markdown when an insertion point is provided with the full document', () => {
-    const markedDocument = 'Alpha paragraph.\n\n<<<SKRIBE_INSERT_HERE>>>\n\nBeta paragraph.';
+    const markedDocument = `Alpha paragraph.\n\n${INSERT_SENTINEL}\n\nBeta paragraph.`;
     const prompt = buildSkribePrompt({
       ...basePrompt,
       insertion: { markedDocument },
     });
 
-    expect(prompt).toContain('<<<SKRIBE_INSERT_HERE>>>');
+    expect(prompt).toContain(INSERT_SENTINEL);
     expect(prompt).toContain('Alpha paragraph.');
     expect(prompt).toContain('Beta paragraph.');
     expect(prompt).toContain('Output only the Markdown to insert');
@@ -139,7 +139,7 @@ describe('buildSkribePrompt', () => {
       ...basePrompt,
       selectedText: 'selected text',
       insertion: {
-        markedDocument: 'Before.\n\n<<<SKRIBE_INSERT_HERE>>>\n\nAfter.',
+        markedDocument: `Before.\n\n${INSERT_SENTINEL}\n\nAfter.`,
       },
     });
 

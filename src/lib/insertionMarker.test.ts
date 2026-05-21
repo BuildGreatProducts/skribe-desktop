@@ -68,4 +68,9 @@ describe('insertionMarker', () => {
   it('returns null when the editor does not expose a markdown serializer', () => {
     expect(buildMarkedDocument(1)).toBeNull();
   });
+
+  it('returns null when the document already contains the insertion sentinel', () => {
+    editor.commands.setContent(`<p>Alpha ${INSERT_SENTINEL} omega</p>`);
+    expect(buildMarkedDocument(1)).toBeNull();
+  });
 });

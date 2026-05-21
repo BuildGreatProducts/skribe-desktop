@@ -261,4 +261,28 @@ describe('AI store listener setup', () => {
       undefined,
     );
   });
+
+  it('aborts insertion-target submissions when no marked document can be built', async () => {
+    const { tauriClient } = installMocks();
+    const { useAiStore } = await import('./aiStore');
+
+    await useAiStore.getState().startSession('/tmp/project');
+    await useAiStore.getState().submitPrompt(
+      'splice in a sentence',
+      '/tmp/project/README.md',
+      {
+        type: 'insertion',
+        insertion: {
+          filePath: '/tmp/project/README.md',
+          pos: 5,
+          blockBefore: 'before',
+          blockAfter: 'after',
+        },
+      },
+    );
+
+    expect(tauriClient.acp.sendPrompt).not.toHaveBeenCalled();
+    expect(useAiStore.getState().status).toBe('error');
+    expect(useAiStore.getState().error?.code).toBe('AI_INSERTION_STALE');
+  });
 });

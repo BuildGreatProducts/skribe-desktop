@@ -257,6 +257,24 @@ export const useAiStore = create<AiState>((set, get) => ({
     }
     if (!sessionId || !prompt.trim()) return;
     const promptTarget = target;
+    // Resolve the insertion context up front so we can fail fast for
+    // insertion-type targets when the marked document cannot be built (no
+    // editor, missing serializer, sentinel collision, file changed). Without
+    // this, the sendPrompt call below would silently omit `insertion` and the
+    // sidecar would downgrade the request to a full-document rewrite.
+    const insertion = insertionContextForPromptTarget(
+      activeFilePath,
+      promptTarget,
+    );
+    if (promptTarget.type === 'insertion' && !insertion) {
+      set({
+        status: 'error',
+        error: classifyAiError(undefined, 'AI_INSERTION_STALE'),
+        streamPreview: hiddenStreamPreview,
+        acceptingStream: false,
+      });
+      return;
+    }
     set({
       status: 'submitting',
       prompt,
@@ -276,10 +294,6 @@ export const useAiStore = create<AiState>((set, get) => ({
       const systemPrompt = buildWritingInstructionsSystemPrompt(
         settings,
         folderPath,
-      );
-      const insertion = insertionContextForPromptTarget(
-        activeFilePath,
-        promptTarget,
       );
       await tauriClient.acp.sendPrompt(
         targetSessionId,
