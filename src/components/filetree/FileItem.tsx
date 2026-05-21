@@ -150,7 +150,7 @@ export function FileItem({
           {markdownNameStem(file.name)}
         </span>
         {!showFolderLabel ? (
-          <span className="mt-1 block truncate text-xs leading-tight text-chrome-text-soft">
+          <span className="mt-1 block truncate font-chrome text-xs leading-tight text-chrome-text-soft">
             {fileSecondaryLabel(previewText)}
           </span>
         ) : null}

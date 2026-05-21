@@ -83,7 +83,7 @@ export function EditorToolbar({ editor, disabled = false }: EditorToolbarProps) 
     <div className="sticky top-0 z-10 h-13 border-b border-hairline bg-paper">
       <div className="absolute inset-0" aria-hidden="true" data-tauri-drag-region />
       <div
-        className="pointer-events-none relative z-10 mx-auto flex h-full w-max max-w-full translate-y-[2px] items-center justify-center gap-4 px-6"
+        className="pointer-events-none relative z-10 mx-auto flex h-full w-max max-w-full translate-y-[2px] items-center justify-center gap-4 px-6 font-chrome"
         role="toolbar"
         aria-label="Text formatting"
       >
