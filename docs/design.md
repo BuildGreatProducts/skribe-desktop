@@ -61,6 +61,7 @@ The current app also uses a small set of non-tokenized AI colors: pure white sur
 ```yaml
 font-editor: "IBM Plex Serif, Iowan Old Style, Georgia, serif"
 font-ui: "IBM Plex Serif, Iowan Old Style, Georgia, serif"
+font-chrome: "Geist, system-ui, -apple-system, sans-serif"
 font-mono: "IBM Plex Mono, SF Mono, Menlo, monospace"
 
 text-xs: 0.75rem
@@ -79,9 +80,9 @@ leading-normal: 1.5
 leading-relaxed: 1.7
 ```
 
-IBM Plex Serif is used for both the editor and the UI. IBM Plex Mono is used for inline code and code blocks. The app imports Plex Serif weights 400, 400 italic, 500, 600, 700 and Plex Mono weights 400 and 600 from `@fontsource`.
+IBM Plex Serif is used for both the editor and the UI. Geist Sans (`font-chrome`) is bundled via `@fontsource/geist` for chrome/navigation sans-serif text: the editor formatting toolbar, document stats, folder names, file preview subheadings, the empty-state Recent heading and folder paths, and the AI prompt input. IBM Plex Mono is used for inline code and code blocks. The app imports Geist weights 400, 500, 600, 700 and Plex Serif weights 400, 400 italic, 500, 600, 700 and Plex Mono weights 400 and 600 from `@fontsource`.
 
-The global body enables `kern`, `liga`, and `onum`. Letter spacing is normally `0`; do not bring back the old negative display tracking. Small uppercase labels may add positive tracking when needed, as the empty-state recent-folder label currently does.
+The global body enables `kern`, `liga`, and `onum`. Letter spacing is normally `0`; do not bring back the old negative display tracking.
 
 The editor default is 18px text with 1.7 line height, but users can choose 14, 16, 18, or 20px and line heights 1.5, 1.7, or 1.9. Design work should tolerate all of those settings without text overlap.
 

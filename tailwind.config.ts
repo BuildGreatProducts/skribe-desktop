@@ -23,6 +23,7 @@ const config: Config = {
       fontFamily: {
         editor: 'var(--font-editor)',
         ui: 'var(--font-ui)',
+        chrome: 'var(--font-chrome)',
         mono: 'var(--font-mono)',
       },
       fontSize: {

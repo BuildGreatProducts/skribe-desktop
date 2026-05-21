@@ -17,6 +17,7 @@
 
   --font-editor: 'IBM Plex Serif', 'Iowan Old Style', Georgia, serif;
   --font-ui: 'IBM Plex Serif', 'Iowan Old Style', Georgia, serif;
+  --font-chrome: 'Geist', system-ui, -apple-system, sans-serif;
   --font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
 
   --text-xs: 0.75rem;

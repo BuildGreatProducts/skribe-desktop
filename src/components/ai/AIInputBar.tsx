@@ -773,7 +773,7 @@ export function AIInputBar() {
                 suppressContentEditableWarning
                 autoCapitalize="off"
                 spellCheck
-                className="min-h-10 min-w-[10rem] flex-1 whitespace-pre-wrap break-words rounded-[1.25rem] py-[0.45rem] pl-1 pr-2 text-base leading-normal text-ink focus:outline-none empty:before:text-chrome-text-soft disabled:opacity-50"
+                className="min-h-10 min-w-[10rem] flex-1 whitespace-pre-wrap break-words rounded-[1.25rem] py-[0.45rem] pl-1 pr-2 font-chrome text-base leading-normal text-ink focus:outline-none empty:before:text-chrome-text-soft disabled:opacity-50"
                 onInput={syncEditorState}
                 onClick={syncEditorState}
                 onFocus={syncEditorState}
