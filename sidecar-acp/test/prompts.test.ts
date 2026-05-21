@@ -118,4 +118,32 @@ describe('buildSkribePrompt', () => {
     expect(prompt).toContain('replacement Markdown for the highlighted text');
     expect(prompt).not.toContain('complete final Markdown contents');
   });
+
+  it('asks for splice-only Markdown when an insertion point is provided with the full document', () => {
+    const markedDocument = 'Alpha paragraph.\n\n<<<SKRIBE_INSERT_HERE>>>\n\nBeta paragraph.';
+    const prompt = buildSkribePrompt({
+      ...basePrompt,
+      insertion: { markedDocument },
+    });
+
+    expect(prompt).toContain('<<<SKRIBE_INSERT_HERE>>>');
+    expect(prompt).toContain('Alpha paragraph.');
+    expect(prompt).toContain('Beta paragraph.');
+    expect(prompt).toContain('Output only the Markdown to insert');
+    expect(prompt).not.toContain('complete final Markdown contents');
+    expect(prompt).not.toContain('replacement Markdown for the highlighted text');
+  });
+
+  it('prefers the insertion branch over the selection branch when both are set', () => {
+    const prompt = buildSkribePrompt({
+      ...basePrompt,
+      selectedText: 'selected text',
+      insertion: {
+        markedDocument: 'Before.\n\n<<<SKRIBE_INSERT_HERE>>>\n\nAfter.',
+      },
+    });
+
+    expect(prompt).toContain('Output only the Markdown to insert');
+    expect(prompt).not.toContain('SKRIBE_SELECTED_TEXT');
+  });
 });

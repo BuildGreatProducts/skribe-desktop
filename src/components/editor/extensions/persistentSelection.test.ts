@@ -4,9 +4,11 @@ import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  INSERTION_MARKER_META,
   PERSISTENT_SELECTION_CLASS,
   PERSISTENT_SELECTION_META,
   PersistentSelection,
+  readInsertionMarkerPos,
 } from './persistentSelection';
 
 const SELECTOR = `.${PERSISTENT_SELECTION_CLASS}`;
@@ -65,5 +67,28 @@ describe('PersistentSelection extension', () => {
 
     setRange({ from: 5, to: 5 });
     expect(mount.querySelector(SELECTOR)).toBeNull();
+  });
+
+  function setInsertionMarker(pos: number | null) {
+    editor.view.dispatch(
+      editor.state.tr.setMeta(INSERTION_MARKER_META, pos),
+    );
+  }
+
+  it('tracks the insertion marker position and clears it when reset', () => {
+    setInsertionMarker(6);
+    expect(readInsertionMarkerPos(editor.state)).toBe(6);
+
+    setInsertionMarker(null);
+    expect(readInsertionMarkerPos(editor.state)).toBeNull();
+  });
+
+  it('maps the insertion marker position through document edits', () => {
+    setInsertionMarker(7);
+    expect(readInsertionMarkerPos(editor.state)).toBe(7);
+
+    editor.view.dispatch(editor.state.tr.insertText('Say ', 1, 1));
+
+    expect(readInsertionMarkerPos(editor.state)).toBe(11);
   });
 });

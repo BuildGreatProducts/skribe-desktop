@@ -110,6 +110,7 @@ describe('AI store listener setup', () => {
       [],
       [],
       false,
+      undefined,
     );
   });
 
@@ -153,6 +154,7 @@ describe('AI store listener setup', () => {
       [],
       [],
       false,
+      undefined,
     );
   });
 
@@ -175,6 +177,7 @@ describe('AI store listener setup', () => {
       [],
       [],
       true,
+      undefined,
     );
   });
 
@@ -211,6 +214,7 @@ describe('AI store listener setup', () => {
       ],
       [],
       false,
+      undefined,
     );
   });
 
@@ -254,6 +258,7 @@ describe('AI store listener setup', () => {
         },
       ],
       false,
+      undefined,
     );
   });
 });

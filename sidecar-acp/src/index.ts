@@ -5,7 +5,12 @@ import { readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { buildClaudeArgs } from './claudeArgs.js';
 import { ClaudeStreamTextAccumulator, toolCallsFromEvent } from './claudeStream.js';
-import { buildSkribePrompt, type DocumentReference, type PromptAttachment } from './prompts.js';
+import {
+  buildSkribePrompt,
+  type DocumentReference,
+  type InsertionContext,
+  type PromptAttachment,
+} from './prompts.js';
 
 type PromptCommand = {
   type: 'prompt';
@@ -17,6 +22,7 @@ type PromptCommand = {
   documentReferences?: DocumentReference[] | null;
   attachments?: PromptAttachment[] | null;
   dangerouslySkipPermissions?: boolean | null;
+  insertion?: InsertionContext | null;
 };
 
 type CancelCommand = {
@@ -90,6 +96,7 @@ async function handlePrompt(command: PromptCommand) {
     selectedText: command.selectedText,
     documentReferences: command.documentReferences,
     attachments: command.attachments,
+    insertion: command.insertion,
   });
 
   const attachmentDirectories = directoriesForAttachments(command.attachments);

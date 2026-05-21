@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { acpEvents } from '../lib/acp';
 import { documentPromptTarget, selectedTextForPromptTarget } from '../lib/aiPromptTarget';
+import { buildMarkedDocument } from '../lib/insertionMarker';
 import { errorMessage, tauriClient } from '../lib/tauri';
 import { buildWritingInstructionsSystemPrompt } from '../lib/writingInstructions';
 import { useEditorStore } from './editorStore';
@@ -14,6 +15,7 @@ import type {
   AiStatus,
   AppErrorCode,
   DocumentReference,
+  InsertionContext,
   PendingClarification,
   PromptAttachment,
 } from '../types';
@@ -275,6 +277,10 @@ export const useAiStore = create<AiState>((set, get) => ({
         settings,
         folderPath,
       );
+      const insertion = insertionContextForPromptTarget(
+        activeFilePath,
+        promptTarget,
+      );
       await tauriClient.acp.sendPrompt(
         targetSessionId,
         prompt,
@@ -284,6 +290,7 @@ export const useAiStore = create<AiState>((set, get) => ({
         documentReferences,
         attachments,
         dangerouslySkipPermissionsForFolder(folderPath),
+        insertion,
       );
     };
 
@@ -412,6 +419,12 @@ function classifyAiError(message = 'Claude Code reported an error.', code?: AppE
         code: inferredCode,
         message: 'The selected text changed before Claude finished. Select it again and retry.',
       };
+    case 'AI_INSERTION_STALE':
+      return {
+        code: inferredCode,
+        message:
+          'The document changed before Claude finished. Pick the insertion point again and retry.',
+      };
     default:
       return {
         code: inferredCode,
@@ -422,4 +435,15 @@ function classifyAiError(message = 'Claude Code reported an error.', code?: AppE
 
 function isBrokenSidecarPipeError(error: unknown): boolean {
   return /(broken pipe|os error 32|pipe closed)/i.test(errorMessage(error));
+}
+
+function insertionContextForPromptTarget(
+  activeFilePath: string,
+  target: AiPromptTarget,
+): InsertionContext | undefined {
+  if (target.type !== 'insertion') return undefined;
+  if (target.insertion.filePath !== activeFilePath) return undefined;
+  const markedDocument = buildMarkedDocument(target.insertion.pos);
+  if (markedDocument === null) return undefined;
+  return { markedDocument };
 }

@@ -4,6 +4,7 @@ import type {
   AppSettings,
   ClaudePreflight,
   DocumentReference,
+  InsertionContext,
   MarkdownFile,
   MarkdownFolder,
   PromptAttachment,
@@ -59,6 +60,7 @@ export const tauriClient = {
       documentReferences?: DocumentReference[],
       attachments?: PromptAttachment[],
       dangerouslySkipPermissions = false,
+      insertion?: InsertionContext,
     ) =>
       invoke<void>('acp_send_prompt', {
         sessionId,
@@ -69,6 +71,7 @@ export const tauriClient = {
         documentReferences,
         attachments: attachments?.map(attachmentPayload),
         dangerouslySkipPermissions,
+        insertion,
       }),
     respondClarification: (
       sessionId: string,
