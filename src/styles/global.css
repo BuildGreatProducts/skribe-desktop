@@ -28,6 +28,11 @@ body {
   background: var(--color-selection);
 }
 
+.skribe-ai-selection {
+  background: var(--color-selection);
+  border-radius: 2px;
+}
+
 button,
 input,
 textarea,

@@ -10,6 +10,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import type { AiError, HighlightedTextSelection } from '../../types';
 import { StatusLine } from '../status/StatusLine';
 import { extensions } from './extensions';
+import { PERSISTENT_SELECTION_META } from './extensions/persistentSelection';
 import { EditorToolbar } from './EditorToolbar';
 import { editorToMarkdown, setMarkdown, tryInsertMarkdownAt, trySetMarkdown } from './markdown';
 import { shouldApplyStream } from './streaming';
@@ -19,6 +20,9 @@ export function Editor() {
   const content = useEditorStore((state) => state.content);
   const setContent = useEditorStore((state) => state.setContent);
   const saveNow = useEditorStore((state) => state.saveNow);
+  const highlightedSelection = useEditorStore(
+    (state) => state.highlightedSelection,
+  );
   const settings = useSettingsStore((state) => state.settings.editor);
   const aiStatus = useAiStore((state) => state.status);
   const promptFilePath = useAiStore((state) => state.promptFilePath);
@@ -170,6 +174,17 @@ export function Editor() {
     // Run only when a new document becomes active; live edits flow through Tiptap updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, filePath]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const range =
+      highlightedSelection && highlightedSelection.filePath === filePath
+        ? { from: highlightedSelection.from, to: highlightedSelection.to }
+        : null;
+    editor.view.dispatch(
+      editor.state.tr.setMeta(PERSISTENT_SELECTION_META, range),
+    );
+  }, [editor, filePath, highlightedSelection]);
 
   useEffect(() => {
     if (!editor || aiStatus !== 'streaming' || filePath !== promptFilePath) return;
