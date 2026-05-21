@@ -12,6 +12,7 @@ import Typography from '@tiptap/extension-typography';
 import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 import { Markdown } from 'tiptap-markdown';
+import { PersistentSelection } from './extensions/persistentSelection';
 
 const lowlight = createLowlight(common);
 
@@ -50,4 +51,5 @@ export const extensions = [
     transformPastedText: true,
     transformCopiedText: true,
   }),
+  PersistentSelection,
 ];
