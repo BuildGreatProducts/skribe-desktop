@@ -30,7 +30,7 @@ export function EmptyState({ onOpenFolder, onOpenRecent }: EmptyStateProps) {
         </Button>
         {recentFolders.length > 0 ? (
           <div className="mt-10 text-left">
-            <p className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-chrome-text-soft">
+            <p className="mb-3 font-chrome text-xs font-medium text-chrome-text-soft">
               Recent
             </p>
             <div className="space-y-1">
@@ -42,7 +42,7 @@ export function EmptyState({ onOpenFolder, onOpenRecent }: EmptyStateProps) {
                   onClick={() => onOpenRecent(folder)}
                 >
                   {folder.split('/').filter(Boolean).at(-1) ?? folder}
-                  <span className="block truncate text-xs text-chrome-text-soft">{folder}</span>
+                  <span className="block truncate font-chrome text-xs text-chrome-text-soft">{folder}</span>
                 </button>
               ))}
             </div>

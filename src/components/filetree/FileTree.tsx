@@ -338,7 +338,7 @@ function FolderHeading({
         aria-label={`${row.collapsed ? 'Show' : 'Hide'} documents in ${row.folderName}`}
         title={row.folderPath}
         className={clsx(
-          'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-sm px-1.5 pr-8 text-left text-xs font-semibold text-chrome-text-soft transition hover:bg-highlight hover:text-chrome-text',
+          'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-sm px-1.5 pr-8 text-left font-chrome text-xs font-semibold text-chrome-text-soft transition hover:bg-highlight hover:text-chrome-text',
           !row.collapsed && 'text-chrome-text',
         )}
         onClick={onToggle}

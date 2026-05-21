@@ -56,7 +56,7 @@ export function StatusLine() {
       className="sticky top-[57px] z-20 h-0"
       aria-live="polite"
     >
-      <div className="pointer-events-none absolute right-4 top-3 flex flex-col items-end text-right text-xs leading-normal text-chrome-text-soft">
+      <div className="pointer-events-none absolute right-4 top-3 flex flex-col items-end text-right font-chrome text-xs leading-normal text-chrome-text-soft">
         {showWordCount ? (
           <span>
             {stats.words === 0 ? 'Empty document' : `${stats.words} words (${stats.reading})`}

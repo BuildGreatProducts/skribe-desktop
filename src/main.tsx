@@ -1,5 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import '@fontsource/geist/latin-400.css';
+import '@fontsource/geist/latin-500.css';
+import '@fontsource/geist/latin-600.css';
+import '@fontsource/geist/latin-700.css';
 import '@fontsource/ibm-plex-serif/latin-400.css';
 import '@fontsource/ibm-plex-serif/latin-400-italic.css';
 import '@fontsource/ibm-plex-serif/latin-500.css';
