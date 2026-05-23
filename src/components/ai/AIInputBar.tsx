@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   FileIcon,
   FileMdIcon,
   FilePdfIcon,
@@ -23,7 +24,10 @@ import {
   type ClipboardEvent,
   type DragEvent,
 } from 'react';
-import { targetFromSelection } from '../../lib/aiPromptTarget';
+import {
+  targetFromInsertionPoint,
+  targetFromSelection,
+} from '../../lib/aiPromptTarget';
 import { tauriClient } from '../../lib/tauri';
 import { useAiStore } from '../../stores/aiStore';
 import { useEditorStore } from '../../stores/editorStore';
@@ -38,6 +42,7 @@ import { Button, Tooltip } from '../ui';
 import { ClaudeStreamPreview } from './ClaudeStreamPreview';
 import { ClarificationPopup } from './ClarificationPopup';
 import { ErrorState } from './ErrorState';
+import { insertionChipLabel } from './insertionChip';
 import { selectionChipLabel } from './selectionChip';
 
 const COLLAPSE_ANIMATION_MS = 200;
@@ -103,6 +108,10 @@ export function AIInputBar() {
   const clearHighlightedSelection = useEditorStore(
     (state) => state.clearHighlightedSelection,
   );
+  const insertionPoint = useEditorStore((state) => state.insertionPoint);
+  const clearInsertionPoint = useEditorStore(
+    (state) => state.clearInsertionPoint,
+  );
   const status = useAiStore((state) => state.status);
   const promptFilePath = useAiStore((state) => state.promptFilePath);
   const streamPreview = useAiStore((state) => state.streamPreview);
@@ -129,6 +138,21 @@ export function AIInputBar() {
     if (folderPath && availability.status === 'ready')
       void startSession(folderPath);
   }, [availability.status, folderPath, startSession]);
+
+  const previousInsertionKey = useRef<string | null>(null);
+  useEffect(() => {
+    const matchesFile =
+      insertionPoint !== null && insertionPoint.filePath === filePath;
+    const key = matchesFile
+      ? `${insertionPoint!.filePath}:${insertionPoint!.pos}`
+      : null;
+    if (key && key !== previousInsertionKey.current) {
+      setExpanded(true);
+      setPromptVisible(true);
+      pendingPromptFocus.current = true;
+    }
+    previousInsertionKey.current = key;
+  }, [filePath, insertionPoint]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -158,6 +182,7 @@ export function AIInputBar() {
     const handler = (event: { target: unknown }) => {
       if (containerRef.current?.contains(event.target as Node)) return;
       clearHighlightedSelection();
+      clearInsertionPoint();
       setExpanded(false);
     };
 
@@ -166,6 +191,7 @@ export function AIInputBar() {
   }, [
     attachments.length,
     clearHighlightedSelection,
+    clearInsertionPoint,
     documentReferences.length,
     status,
     textValue,
@@ -205,6 +231,13 @@ export function AIInputBar() {
       ? highlightedSelection
       : null;
   const selectionLabel = selection ? selectionChipLabel(selection.text) : null;
+  const insertion =
+    insertionPoint && insertionPoint.filePath === filePath
+      ? insertionPoint
+      : null;
+  const insertionLabel = insertion
+    ? insertionChipLabel(insertion.blockAfter || insertion.blockBefore)
+    : null;
   const mentionableDocuments = useMemo(
     () =>
       files.filter(
@@ -228,6 +261,7 @@ export function AIInputBar() {
   const hasPromptContent =
     Boolean(textValue.trim()) ||
     Boolean(selection) ||
+    Boolean(insertion) ||
     documentReferences.length > 0 ||
     attachments.length > 0;
   const isExpanded =
@@ -403,6 +437,7 @@ export function AIInputBar() {
     setAttachments([]);
     setMention(null);
     clearHighlightedSelection();
+    clearInsertionPoint();
     pendingPromptFocus.current = false;
     setExpanded(false);
     setPromptVisible(false);
@@ -413,6 +448,7 @@ export function AIInputBar() {
   }, [
     busy,
     clearHighlightedSelection,
+    clearInsertionPoint,
     filePath,
     streamPreview.visible,
   ]);
@@ -473,7 +509,9 @@ export function AIInputBar() {
     if (!filePath || !currentText.trim() || disabled) return;
 
     const prompt = promptValueFromSegments(currentSegments);
-    const target = targetFromSelection(filePath, selection);
+    const target = insertion
+      ? targetFromInsertionPoint(filePath, insertion)
+      : targetFromSelection(filePath, selection);
     const references = documentReferencesFromSegments(currentSegments);
     const promptAttachments = attachments;
     const nextTextSegment = createTextPromptSegment();
@@ -588,6 +626,7 @@ export function AIInputBar() {
     setAttachments([]);
     setMention(null);
     clearHighlightedSelection();
+    clearInsertionPoint();
     setExpanded(false);
     editorRef.current?.blur();
   }
@@ -629,6 +668,7 @@ export function AIInputBar() {
           if (
             !textValue.trim() &&
             !selection &&
+            !insertion &&
             documentReferences.length === 0 &&
             attachments.length === 0 &&
             status === 'idle'
@@ -745,6 +785,31 @@ export function AIInputBar() {
                   onRemove={() => removeAttachment(attachment.path)}
                 />
               ))}
+              {insertionLabel ? (
+                <span
+                  aria-label={`Insertion point: ${insertionLabel}`}
+                  className="inline-flex h-8 max-w-[12rem] shrink-0 items-center gap-1 rounded-full bg-selection px-3 text-sm font-semibold leading-none text-success"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-success text-white"
+                  >
+                    <ArrowRight size={10} weight="bold" />
+                  </span>
+                  <span className="truncate">{insertionLabel}</span>
+                  <button
+                    type="button"
+                    aria-label="Clear insertion point"
+                    className="-mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-success transition hover:bg-success/10 focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-1"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      clearInsertionPoint();
+                    }}
+                  >
+                    <XIcon size={12} weight="bold" />
+                  </button>
+                </span>
+              ) : null}
               {selectionLabel ? (
                 <span
                   aria-label={`Selected text: ${selectionLabel}`}

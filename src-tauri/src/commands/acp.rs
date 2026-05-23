@@ -43,6 +43,12 @@ pub struct DocumentReference {
     name: String,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InsertionContext {
+    marked_document: String,
+}
+
 #[tauri::command]
 pub fn acp_start(
     app: AppHandle,
@@ -120,6 +126,7 @@ pub fn acp_send_prompt(
     document_references: Option<Vec<DocumentReference>>,
     attachments: Option<Vec<PromptAttachment>>,
     dangerously_skip_permissions: Option<bool>,
+    insertion: Option<InsertionContext>,
     state: State<AcpState>,
 ) -> Result<(), AppError> {
     let mut sessions = state
@@ -142,6 +149,11 @@ pub fn acp_send_prompt(
             })
         })
         .collect::<Vec<_>>();
+    let insertion_payload = insertion.map(|insertion| {
+        json!({
+            "markedDocument": insertion.marked_document,
+        })
+    });
     session
         .write_json(&json!({
             "type": "prompt",
@@ -152,7 +164,8 @@ pub fn acp_send_prompt(
             "selectedText": selected_text,
             "documentReferences": document_references.unwrap_or_default(),
             "attachments": attachments,
-            "dangerouslySkipPermissions": dangerously_skip_permissions.unwrap_or(false)
+            "dangerouslySkipPermissions": dangerously_skip_permissions.unwrap_or(false),
+            "insertion": insertion_payload
         }))
         .map_err(|error| AppError::AcpSidecarFailed(error.to_string()))
 }

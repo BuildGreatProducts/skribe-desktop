@@ -20,9 +20,17 @@ export function ErrorState() {
 
   const retryFilePath = promptFilePath ?? filePath;
   const targetMatchesFile =
-    promptTarget.type === 'document' || promptTarget.selection.filePath === retryFilePath;
+    promptTarget.type === 'document'
+      ? true
+      : promptTarget.type === 'selection'
+        ? promptTarget.selection.filePath === retryFilePath
+        : promptTarget.insertion.filePath === retryFilePath;
   const canRetry = Boolean(
-    prompt.trim() && retryFilePath && targetMatchesFile && error.code !== 'AI_SELECTION_STALE',
+    prompt.trim() &&
+      retryFilePath &&
+      targetMatchesFile &&
+      error.code !== 'AI_SELECTION_STALE' &&
+      error.code !== 'AI_INSERTION_STALE',
   );
 
   return (

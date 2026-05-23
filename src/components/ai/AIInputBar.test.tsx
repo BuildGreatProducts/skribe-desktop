@@ -103,6 +103,12 @@ const highlightedSelection = {
   to: 14,
   text: 'selected text',
 };
+const insertionPoint = {
+  filePath,
+  pos: 12,
+  blockBefore: 'previous block',
+  blockAfter: 'next block',
+};
 
 function promptEditor() {
   return screen.getByRole('textbox', { name: 'AI prompt' });
@@ -977,6 +983,72 @@ describe('AIInputBar selection collapse behavior', () => {
 
     expect(
       screen.queryByLabelText('Referenced document: Brief.md'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows an insertion chip and auto-focuses the prompt when an insertion point is set', () => {
+    useEditorStore.setState({
+      filePath,
+      highlightedSelection: null,
+      insertionPoint: null,
+    });
+    render(<AIInputBar />);
+
+    expect(
+      screen.getByRole('button', { name: 'Open AI prompt' }),
+    ).toBeInTheDocument();
+
+    act(() => {
+      useEditorStore.getState().setInsertionPoint(insertionPoint);
+    });
+
+    expect(
+      screen.getByLabelText('Insertion point: next block'),
+    ).toBeInTheDocument();
+    expect(promptEditor()).toHaveFocus();
+  });
+
+  it('clears the insertion chip and uses an insertion target when submitting', async () => {
+    const submitPrompt = vi.fn(async () => undefined);
+    useEditorStore.setState({
+      filePath,
+      highlightedSelection: null,
+      insertionPoint,
+    });
+    useAiStore.setState({ submitPrompt });
+    render(<AIInputBar />);
+
+    expect(
+      screen.getByLabelText('Insertion point: next block'),
+    ).toBeInTheDocument();
+
+    setPromptText('Add a closing thought.');
+    fireEvent.click(screen.getByRole('button', { name: 'Submit AI prompt' }));
+
+    expect(submitPrompt).toHaveBeenCalledWith(
+      'Add a closing thought.',
+      filePath,
+      { type: 'insertion', insertion: insertionPoint },
+      [],
+      [],
+    );
+  });
+
+  it('removes the insertion chip when the clear button is pressed', () => {
+    useEditorStore.setState({
+      filePath,
+      highlightedSelection: null,
+      insertionPoint,
+    });
+    render(<AIInputBar />);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Clear insertion point' }),
+    );
+
+    expect(useEditorStore.getState().insertionPoint).toBeNull();
+    expect(
+      screen.queryByLabelText('Insertion point: next block'),
     ).not.toBeInTheDocument();
   });
 });

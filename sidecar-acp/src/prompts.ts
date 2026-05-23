@@ -12,6 +12,12 @@ export type PromptAttachment = {
   mimeType?: string | null;
 };
 
+export type InsertionContext = {
+  markedDocument: string;
+};
+
+export const INSERT_SENTINEL = '<<<SKRIBE_INSERT_HERE>>>';
+
 export type SkribePromptOptions = {
   prompt: string;
   activeFilePath: string;
@@ -19,6 +25,7 @@ export type SkribePromptOptions = {
   selectedText?: string | null;
   documentReferences?: DocumentReference[] | null;
   attachments?: PromptAttachment[] | null;
+  insertion?: InsertionContext | null;
 };
 
 export function buildSkribePrompt({
@@ -28,10 +35,39 @@ export function buildSkribePrompt({
   selectedText,
   documentReferences,
   attachments,
+  insertion,
 }: SkribePromptOptions) {
   const selection = selectedText?.trim() ? selectedText : null;
   const documentReferenceContext = documentReferenceContextBlock(documentReferences);
   const attachmentContext = attachmentContextBlock(attachments);
+  const insertionDoc = insertion?.markedDocument?.trim()
+    ? insertion.markedDocument
+    : null;
+
+  if (insertionDoc) {
+    return `${prompt}
+
+You are Skribe's editing agent.
+Active markdown file: ${activeFilePath}
+Working folder: ${workingFolder}
+${documentReferenceContext}
+${attachmentContext}
+
+Full Markdown document with the user's chosen insertion point marked as ${INSERT_SENTINEL}:
+<<<SKRIBE_DOCUMENT
+${insertionDoc}
+SKRIBE_DOCUMENT
+
+Use Claude Code's file tools when useful:
+- You may inspect sibling markdown files for tone and context.
+- You may use WebFetch to read URLs explicitly provided by the user.
+- Do not use file modification tools. Skribe will splice your final Markdown into the document at the marker.
+- Use the surrounding text in the document above as context so the inserted content flows naturally with what comes before and after the marker.
+- Do not output the rest of the document, do not repeat the marker, and do not rewrite unrelated text.
+- If the user asks to create another file, describe the requested file content in your final response instead of writing it.
+
+Output only the Markdown to insert at the ${INSERT_SENTINEL} marker. Do not output the surrounding document. Do not add an outer code fence around your response. Still use normal Markdown code fences inside the content for literal code, terminal output, and file trees; use a text fence for directory/file trees. Do not include commentary.`;
+  }
 
   if (selection) {
     return `${prompt}

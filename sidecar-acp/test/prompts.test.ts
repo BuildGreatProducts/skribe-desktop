@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSkribePrompt } from '../src/prompts.js';
+import { INSERT_SENTINEL, buildSkribePrompt } from '../src/prompts.js';
 
 const basePrompt = {
   prompt: 'make it warmer',
@@ -117,5 +117,33 @@ describe('buildSkribePrompt', () => {
     expect(prompt).toContain('User-attached files');
     expect(prompt).toContain('replacement Markdown for the highlighted text');
     expect(prompt).not.toContain('complete final Markdown contents');
+  });
+
+  it('asks for splice-only Markdown when an insertion point is provided with the full document', () => {
+    const markedDocument = `Alpha paragraph.\n\n${INSERT_SENTINEL}\n\nBeta paragraph.`;
+    const prompt = buildSkribePrompt({
+      ...basePrompt,
+      insertion: { markedDocument },
+    });
+
+    expect(prompt).toContain(INSERT_SENTINEL);
+    expect(prompt).toContain('Alpha paragraph.');
+    expect(prompt).toContain('Beta paragraph.');
+    expect(prompt).toContain('Output only the Markdown to insert');
+    expect(prompt).not.toContain('complete final Markdown contents');
+    expect(prompt).not.toContain('replacement Markdown for the highlighted text');
+  });
+
+  it('prefers the insertion branch over the selection branch when both are set', () => {
+    const prompt = buildSkribePrompt({
+      ...basePrompt,
+      selectedText: 'selected text',
+      insertion: {
+        markedDocument: `Before.\n\n${INSERT_SENTINEL}\n\nAfter.`,
+      },
+    });
+
+    expect(prompt).toContain('Output only the Markdown to insert');
+    expect(prompt).not.toContain('SKRIBE_SELECTED_TEXT');
   });
 });

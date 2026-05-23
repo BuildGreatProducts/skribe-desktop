@@ -31,6 +31,7 @@ export default [
         HTMLElement: 'readonly',
         MouseEvent: 'readonly',
         Node: 'readonly',
+        ResizeObserver: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         console: 'readonly',

@@ -10,6 +10,7 @@ export type AppErrorCode =
   | 'ACP_SIDECAR_FAILED'
   | 'ACP_PROTOCOL_ERROR'
   | 'AI_SELECTION_STALE'
+  | 'AI_INSERTION_STALE'
   | 'SETTINGS_INVALID'
   | 'INTERNAL';
 
@@ -134,9 +135,21 @@ export type HighlightedTextSelection = {
   text: string;
 };
 
+export type InsertionPoint = {
+  filePath: string;
+  pos: number;
+  blockBefore: string;
+  blockAfter: string;
+};
+
+export type InsertionContext = {
+  markedDocument: string;
+};
+
 export type AiPromptTarget =
   | { type: 'document' }
-  | { type: 'selection'; selection: HighlightedTextSelection };
+  | { type: 'selection'; selection: HighlightedTextSelection }
+  | { type: 'insertion'; insertion: InsertionPoint };
 
 export type FsChangeEvent = {
   event: 'created' | 'modified' | 'deleted';

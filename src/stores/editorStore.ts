@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { errorMessage, tauriClient } from '../lib/tauri';
-import type { HighlightedTextSelection, SaveStatus } from '../types';
+import type {
+  HighlightedTextSelection,
+  InsertionPoint,
+  SaveStatus,
+} from '../types';
 
 type EditorState = {
   filePath: string | null;
@@ -14,6 +18,7 @@ type EditorState = {
   error: string | null;
   saveTimer: number | null;
   highlightedSelection: HighlightedTextSelection | null;
+  insertionPoint: InsertionPoint | null;
   openFile: (filePath: string) => Promise<void>;
   closeFile: () => void;
   setContent: (content: string, options?: { skipAutosave?: boolean }) => void;
@@ -22,6 +27,8 @@ type EditorState = {
   applyExternalContent: (content: string) => void;
   setHighlightedSelection: (selection: HighlightedTextSelection) => void;
   clearHighlightedSelection: () => void;
+  setInsertionPoint: (insertion: InsertionPoint) => void;
+  clearInsertionPoint: () => void;
 };
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -36,6 +43,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   error: null,
   saveTimer: null,
   highlightedSelection: null,
+  insertionPoint: null,
   openFile: async (filePath) => {
     set({ loading: true, error: null });
     try {
@@ -51,6 +59,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         saveStatus: 'saved',
         saveTimer: null,
         highlightedSelection: null,
+        insertionPoint: null,
       });
     } catch (error) {
       set({ loading: false, error: errorMessage(error) });
@@ -67,6 +76,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       saveStatus: 'idle',
       saveTimer: null,
       highlightedSelection: null,
+      insertionPoint: null,
     });
   },
   setContent: (content, options) => {
@@ -152,9 +162,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
   setHighlightedSelection: (selection) => {
-    set({ highlightedSelection: selection });
+    set({ highlightedSelection: selection, insertionPoint: null });
   },
   clearHighlightedSelection: () => {
     set({ highlightedSelection: null });
+  },
+  setInsertionPoint: (insertion) => {
+    set({ insertionPoint: insertion, highlightedSelection: null });
+  },
+  clearInsertionPoint: () => {
+    set({ insertionPoint: null });
   },
 }));
