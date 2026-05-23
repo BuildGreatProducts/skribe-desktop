@@ -26,6 +26,9 @@ jobs:
       - name: Prepare sidecar
         run: npm run sidecar:prepare
 
+      - name: Build frontend
+        run: npm run build
+
       - name: Test
         run: |
           npm run typecheck
