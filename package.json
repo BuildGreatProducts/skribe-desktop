@@ -56,7 +56,6 @@
     "@tiptap/extension-typography": "^2.27.1",
     "@tiptap/react": "^2.27.1",
     "@tiptap/starter-kit": "^2.27.1",
-    "@zed-industries/codex-acp": "^0.15.0",
     "clsx": "^2.1.1",
     "lowlight": "^3.3.0",
     "react": "^18.3.1",

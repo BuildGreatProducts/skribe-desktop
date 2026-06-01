@@ -31,7 +31,8 @@ export const AGENTS: Record<AgentId, AgentMetadata> = {
     shortLabel: 'Codex',
     installUrl: 'https://github.com/zed-industries/codex-acp',
     loginCommand: null,
-    missingDescription: 'Install Codex ACP to enable Codex edits in Skribe.',
+    missingDescription:
+      'Install Codex ACP (the codex-acp command) to enable Codex edits in Skribe.',
     readyDescription:
       'Codex ACP is available. Authentication will be checked when a request runs.',
   },

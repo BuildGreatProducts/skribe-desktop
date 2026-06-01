@@ -280,11 +280,15 @@ fn mark_session_crashed(app: &AppHandle, session_id: &str) {
 fn session_agent_id(app: &AppHandle, session_id: &str) -> Option<String> {
     let state = app.state::<AcpState>();
     let agent_id = match state.sessions.lock() {
-        Ok(sessions) => sessions.get(session_id).map(|session| session.agent_id.clone()),
+        Ok(sessions) => sessions
+            .get(session_id)
+            .map(|session| session.agent_id.clone()),
         Err(poisoned) => {
             eprintln!("ACP session state mutex poisoned while reading session agent");
             let sessions = poisoned.into_inner();
-            sessions.get(session_id).map(|session| session.agent_id.clone())
+            sessions
+                .get(session_id)
+                .map(|session| session.agent_id.clone())
         }
     };
     agent_id

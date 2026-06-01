@@ -9,8 +9,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.31.4",
-    "@agentclientprotocol/sdk": "^0.22.1",
-    "@zed-industries/codex-acp": "^0.15.0"
+    "@agentclientprotocol/sdk": "^0.22.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

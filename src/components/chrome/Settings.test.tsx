@@ -10,12 +10,27 @@ import { defaultSettings, useSettingsStore } from '../../stores/settingsStore';
 import type { AppSettings } from '../../types';
 import { Settings } from './Settings';
 
+const tauriMocks = vi.hoisted(() => ({
+  openCodexInstaller: vi.fn(),
+}));
+
 vi.mock('@tauri-apps/plugin-shell', () => ({
   open: vi.fn(),
 }));
 
+vi.mock('../../lib/tauri', () => ({
+  errorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  tauriClient: {
+    agents: {
+      openCodexInstaller: tauriMocks.openCodexInstaller,
+    },
+  },
+}));
+
 describe('Settings', () => {
   beforeEach(() => {
+    tauriMocks.openCodexInstaller.mockResolvedValue(undefined);
+
     const update = vi.fn(async (recipe: (settings: AppSettings) => AppSettings) => {
       const settings = recipe(useSettingsStore.getState().settings);
       useSettingsStore.setState({ settings });
@@ -93,5 +108,40 @@ describe('Settings', () => {
     ).toBe(true);
     expect(useSettingsStore.getState().settings.ai.dangerouslySkipPermissions).toBe(false);
     expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('opens the Codex ACP installer and verifies the install from settings', async () => {
+    const run = vi.fn(async () => undefined);
+    usePreflightStore.setState((state) => ({
+      availabilityByAgent: {
+        ...state.availabilityByAgent,
+        codex: {
+          agentId: 'codex',
+          status: 'missing',
+          installed: false,
+          version: null,
+          loggedIn: false,
+          lastCheckedAt: null,
+          error: null,
+        },
+      },
+      run,
+    }));
+
+    render(<Settings open onClose={() => undefined} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'AI' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Install Codex ACP' }));
+
+    expect(tauriMocks.openCodexInstaller).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByText(
+        'After Terminal finishes, return here and verify the installation.',
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verify installation' }));
+
+    expect(run).toHaveBeenCalledWith({ force: true, agentId: 'codex' });
   });
 });

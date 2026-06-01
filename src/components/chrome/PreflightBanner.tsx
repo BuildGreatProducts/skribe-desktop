@@ -18,8 +18,8 @@ export function PreflightBanner() {
   const isClaude = selectedAgent === 'claude';
 
   return (
-    <div className="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-hairline bg-chrome-bg px-4 py-2 text-sm text-chrome-text">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+    <div className="relative flex min-h-12 shrink-0 items-center justify-center border-b border-hairline bg-chrome-bg px-14 py-2 text-center text-sm text-chrome-text">
+      <div className="flex min-w-0 flex-wrap items-center justify-center gap-2">
         <Warning size={17} className="text-warning" />
         <span>
           {isMissing
@@ -64,7 +64,7 @@ export function PreflightBanner() {
       <Button
         aria-label="Dismiss"
         variant="secondary"
-        className="h-7 w-7 px-0"
+        className="absolute right-4 h-7 w-7 px-0"
         onClick={() => dismiss(selectedAgent)}
         icon={<X size={15} />}
       />
