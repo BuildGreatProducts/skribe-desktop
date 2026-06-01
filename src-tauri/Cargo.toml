@@ -1,10 +1,10 @@
 [package]
 name = "skribe"
-version = "0.1.0"
+version = "0.1.6"
 description = "A Mac-native markdown writing app where Claude Code edits documents in real time."
 authors = ["Skribe contributors"]
 license = "MIT"
-repository = "https://github.com/chrisashby/skribe"
+repository = "https://github.com/BuildGreatProducts/skribe-desktop"
 edition = "2021"
 
 [build-dependencies]
