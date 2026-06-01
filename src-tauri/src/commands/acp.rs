@@ -35,6 +35,9 @@ struct SidecarEvent {
     version: Option<String>,
 }
 
+const CLAUDE_ACP_MIN_VERSION: &str = "0.31.2";
+const CODEX_ACP_MIN_VERSION: &str = "0.15.0";
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentReference {
@@ -53,8 +56,10 @@ pub struct InsertionContext {
 pub fn acp_start(
     app: AppHandle,
     folder_path: String,
+    agent_id: String,
     state: State<AcpState>,
 ) -> Result<AcpStartResponse, AppError> {
+    let agent_id = normalize_agent_id(&agent_id)?;
     let folder = fs::canonicalize(&folder_path)?;
     if !folder.is_dir() {
         return Err(AppError::FsInvalidPath(
@@ -68,12 +73,16 @@ pub fn acp_start(
     command
         .current_dir(folder)
         .env("PATH", claude_path::path_env())
+        .env("SKRIBE_AGENT_ID", &agent_id)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
     if let Some(claude_binary) = claude_path::resolve_claude_binary() {
         command.env("CLAUDE_CODE_PATH", claude_binary);
+    }
+    if let Some(codex_acp_binary) = claude_path::resolve_codex_acp_binary() {
+        command.env("CODEX_ACP_PATH", codex_acp_binary);
     }
 
     let mut child = command
@@ -96,9 +105,13 @@ pub fn acp_start(
     spawn_stdout_relay(app.clone(), session_id.clone(), stdout);
     spawn_stderr_drain(stderr);
 
-    let mut process = AcpProcess { child, stdin };
+    let mut process = AcpProcess {
+        child,
+        stdin,
+        agent_id: agent_id.clone(),
+    };
     process
-        .write_json(&json!({ "type": "version", "sessionId": session_id }))
+        .write_json(&json!({ "type": "version", "sessionId": session_id, "agentId": agent_id }))
         .map_err(|error| AppError::AcpSidecarFailed(error.to_string()))?;
 
     state
@@ -114,6 +127,13 @@ pub fn acp_start(
     .map_err(|error| AppError::internal(error.to_string()))?;
 
     Ok(AcpStartResponse { session_id })
+}
+
+fn normalize_agent_id(agent_id: &str) -> Result<String, AppError> {
+    match agent_id {
+        "claude" | "codex" => Ok(agent_id.to_string()),
+        _ => Err(AppError::SettingsInvalid("Unsupported AI agent".into())),
+    }
 }
 
 #[tauri::command]
@@ -248,23 +268,45 @@ fn spawn_stdout_relay(app: AppHandle, session_id: String, stdout: std::process::
 }
 
 fn mark_session_crashed(app: &AppHandle, session_id: &str) {
-    let state = app.state::<AcpState>();
-    let sessions = state.sessions.lock();
-    let removed = match sessions {
-        Ok(mut sessions) => sessions.remove(session_id),
-        Err(poisoned) => {
-            eprintln!("ACP session state mutex poisoned while marking session crashed");
-            let mut sessions = poisoned.into_inner();
-            sessions.remove(session_id)
-        }
-    };
-
-    if let Some(mut process) = removed {
+    if let Some(mut process) = remove_session(app, session_id) {
         let _ = process.child.kill();
         let _ = app.emit(
             "acp:status",
             json!({ "sessionId": session_id, "status": "crashed" }),
         );
+    }
+}
+
+fn session_agent_id(app: &AppHandle, session_id: &str) -> Option<String> {
+    let state = app.state::<AcpState>();
+    let agent_id = match state.sessions.lock() {
+        Ok(sessions) => sessions.get(session_id).map(|session| session.agent_id.clone()),
+        Err(poisoned) => {
+            eprintln!("ACP session state mutex poisoned while reading session agent");
+            let sessions = poisoned.into_inner();
+            sessions.get(session_id).map(|session| session.agent_id.clone())
+        }
+    };
+    agent_id
+}
+
+fn remove_session(app: &AppHandle, session_id: &str) -> Option<AcpProcess> {
+    let state = app.state::<AcpState>();
+    let removed = match state.sessions.lock() {
+        Ok(mut sessions) => sessions.remove(session_id),
+        Err(poisoned) => {
+            eprintln!("ACP session state mutex poisoned while removing session");
+            let mut sessions = poisoned.into_inner();
+            sessions.remove(session_id)
+        }
+    };
+    removed
+}
+
+fn terminate_session(app: &AppHandle, session_id: &str) {
+    if let Some(mut process) = remove_session(app, session_id) {
+        let _ = process.child.kill();
+        let _ = process.child.wait();
     }
 }
 
@@ -332,16 +374,24 @@ fn relay_event(app: &AppHandle, event: SidecarEvent) {
         }
         "version" => {
             if let Some(version) = event.version {
-                if semver_lt(&version, "0.31.2") {
-                    let _ = app.emit(
-                        "acp:complete",
-                        json!({
-                            "sessionId": session_id,
-                            "status": "error",
-                            "code": "ACP_PROTOCOL_ERROR",
-                            "error": format!("ACP package version {version} is below the required 0.31.2")
-                        }),
-                    );
+                let agent_id =
+                    session_agent_id(app, &session_id).unwrap_or_else(|| "claude".to_string());
+                if let Some(minimum) = acp_min_version(agent_id.as_str()) {
+                    if semver_lt(&version, minimum) {
+                        let _ = app.emit(
+                            "acp:complete",
+                            json!({
+                                "sessionId": session_id,
+                                "status": "error",
+                                "code": "ACP_PROTOCOL_ERROR",
+                                "terminateSession": true,
+                                "error": format!(
+                                    "ACP package version {version} is below the required {minimum}"
+                                )
+                            }),
+                        );
+                        terminate_session(app, &session_id);
+                    }
                 }
             }
         }
@@ -440,6 +490,14 @@ fn target_sidecar_name() -> &'static str {
     }
 }
 
+fn acp_min_version(agent_id: &str) -> Option<&'static str> {
+    match agent_id {
+        "claude" => Some(CLAUDE_ACP_MIN_VERSION),
+        "codex" => Some(CODEX_ACP_MIN_VERSION),
+        _ => None,
+    }
+}
+
 fn semver_lt(actual: &str, minimum: &str) -> bool {
     let parse = |value: &str| {
         value
@@ -462,12 +520,20 @@ fn semver_lt(actual: &str, minimum: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::semver_lt;
+    use super::{acp_min_version, semver_lt};
 
     #[test]
     fn compares_semver_floor() {
         assert!(semver_lt("0.31.1", "0.31.2"));
         assert!(!semver_lt("0.31.2", "0.31.2"));
         assert!(!semver_lt("0.32.0", "0.31.2"));
+    }
+
+    #[test]
+    fn codex_acp_min_version_is_below_claude_floor() {
+        assert_eq!(acp_min_version("codex"), Some("0.15.0"));
+        assert!(!semver_lt("0.15.0", "0.15.0"));
+        assert!(semver_lt("0.14.9", "0.15.0"));
+        assert!(semver_lt("0.15.0", "0.31.2"));
     }
 }

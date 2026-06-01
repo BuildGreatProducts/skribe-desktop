@@ -28,13 +28,25 @@ describe('Settings', () => {
       update,
     });
     usePreflightStore.setState({
-      availability: {
-        status: 'ready',
-        installed: true,
-        version: '1.0.0',
-        loggedIn: null,
-        lastCheckedAt: null,
-        error: null,
+      availabilityByAgent: {
+        claude: {
+          agentId: 'claude',
+          status: 'ready',
+          installed: true,
+          version: '1.0.0',
+          loggedIn: null,
+          lastCheckedAt: null,
+          error: null,
+        },
+        codex: {
+          agentId: 'codex',
+          status: 'ready',
+          installed: true,
+          version: '0.15.0',
+          loggedIn: null,
+          lastCheckedAt: null,
+          error: null,
+        },
       },
       run: vi.fn(async () => undefined),
     });

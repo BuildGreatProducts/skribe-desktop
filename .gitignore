@@ -5,6 +5,7 @@ dist-ssr
 .DS_Store
 src-tauri/target
 src-tauri/binaries/acp-sidecar-*
+src-tauri/build-resources
 src-tauri/gen
 sidecar-acp/dist
 coverage

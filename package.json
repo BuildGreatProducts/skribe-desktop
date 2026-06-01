@@ -25,12 +25,14 @@
     "test:watch": "vitest",
     "sidecar:build": "tsc -p sidecar-acp/tsconfig.json",
     "sidecar:prepare": "npm run sidecar:build && node scripts/prepare-sidecar.mjs",
+    "tauri:resources": "node scripts/prepare-tauri-resources.mjs",
     "tauri": "npm run sidecar:prepare && tauri",
     "tauri:dev": "npm run tauri -- dev",
     "tauri:build": "npm run tauri -- build"
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.31.4",
+    "@agentclientprotocol/sdk": "^0.22.1",
     "@fontsource/geist": "^5.2.9",
     "@fontsource/ibm-plex-mono": "*",
     "@fontsource/ibm-plex-serif": "*",
@@ -54,6 +56,7 @@
     "@tiptap/extension-typography": "^2.27.1",
     "@tiptap/react": "^2.27.1",
     "@tiptap/starter-kit": "^2.27.1",
+    "@zed-industries/codex-acp": "^0.15.0",
     "clsx": "^2.1.1",
     "lowlight": "^3.3.0",
     "react": "^18.3.1",

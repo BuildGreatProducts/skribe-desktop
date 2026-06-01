@@ -50,6 +50,7 @@ fn main() {
             settings_commands::settings_load,
             settings_commands::settings_save,
             settings_commands::settings_add_recent_folder,
+            claude::agent_preflight,
             claude::claude_preflight,
             acp::acp_start,
             acp::acp_send_prompt,

@@ -22,6 +22,7 @@ export type SkribePromptOptions = {
   prompt: string;
   activeFilePath: string;
   workingFolder: string;
+  agentLabel?: string;
   selectedText?: string | null;
   documentReferences?: DocumentReference[] | null;
   attachments?: PromptAttachment[] | null;
@@ -32,6 +33,7 @@ export function buildSkribePrompt({
   prompt,
   activeFilePath,
   workingFolder,
+  agentLabel = 'Claude Code',
   selectedText,
   documentReferences,
   attachments,
@@ -58,7 +60,7 @@ Full Markdown document with the user's chosen insertion point marked as ${INSERT
 ${insertionDoc}
 SKRIBE_DOCUMENT
 
-Use Claude Code's file tools when useful:
+Use ${agentLabel}'s file tools when useful:
 - You may inspect sibling markdown files for tone and context.
 - You may use WebFetch to read URLs explicitly provided by the user.
 - Do not use file modification tools. Skribe will splice your final Markdown into the document at the marker.
@@ -83,7 +85,7 @@ Highlighted text selected by the user:
 ${selectedText}
 SKRIBE_SELECTED_TEXT
 
-Use Claude Code's file tools when useful:
+Use ${agentLabel}'s file tools when useful:
 - Read the active markdown file before editing it.
 - You may inspect sibling markdown files for tone and context.
 - You may use WebFetch to read URLs explicitly provided by the user.
@@ -102,7 +104,7 @@ Working folder: ${workingFolder}
 ${documentReferenceContext}
 ${attachmentContext}
 
-Use Claude Code's file tools when useful:
+Use ${agentLabel}'s file tools when useful:
 - Read the active markdown file before editing it.
 - You may inspect sibling markdown files for tone and context.
 - You may use WebFetch to read URLs explicitly provided by the user.

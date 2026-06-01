@@ -1,3 +1,5 @@
+import type { AgentId } from '../lib/agents';
+
 export type AppErrorCode =
   | 'FS_PERMISSION_DENIED'
   | 'FS_NOT_FOUND'
@@ -7,6 +9,11 @@ export type AppErrorCode =
   | 'CLAUDE_RATE_LIMITED'
   | 'CLAUDE_NETWORK_ERROR'
   | 'CLAUDE_UNKNOWN_ERROR'
+  | 'CODEX_NOT_INSTALLED'
+  | 'CODEX_NOT_LOGGED_IN'
+  | 'CODEX_RATE_LIMITED'
+  | 'CODEX_NETWORK_ERROR'
+  | 'CODEX_UNKNOWN_ERROR'
   | 'ACP_SIDECAR_FAILED'
   | 'ACP_PROTOCOL_ERROR'
   | 'AI_SELECTION_STALE'
@@ -70,6 +77,7 @@ export type AppSettings = {
   };
   ai: {
     dangerouslySkipPermissions: boolean;
+    selectedAgent: AgentId;
     systemPrompt: string;
     projectWritingInstructions: Record<string, string>;
   };
@@ -81,26 +89,38 @@ export type AppSettings = {
 };
 
 export type ClaudePreflight = {
+  agentId?: AgentId;
   installed: boolean;
   version: string | null;
   loggedIn: boolean;
 };
 
-export type ClaudeAvailabilityStatus =
+export type AgentPreflight = {
+  agentId: AgentId;
+  installed: boolean;
+  version: string | null;
+  loggedIn: boolean;
+};
+
+export type AgentAvailabilityStatus =
   | 'checking'
   | 'ready'
   | 'missing'
   | 'login_required'
   | 'check_failed';
 
-export type ClaudeAvailability = {
-  status: ClaudeAvailabilityStatus;
+export type AgentAvailability = {
+  agentId: AgentId;
+  status: AgentAvailabilityStatus;
   installed: boolean | null;
   version: string | null;
   loggedIn: boolean | null;
   lastCheckedAt: number | null;
   error: string | null;
 };
+
+export type ClaudeAvailabilityStatus = AgentAvailabilityStatus;
+export type ClaudeAvailability = AgentAvailability;
 
 export type SaveStatus = 'idle' | 'editing' | 'saving' | 'saved' | 'error';
 
@@ -167,6 +187,7 @@ export type AcpCompleteEvent = {
   status: 'ok' | 'error';
   code?: AppErrorCode;
   error?: string;
+  terminateSession?: boolean;
 };
 
 export type AcpStatusEvent = {

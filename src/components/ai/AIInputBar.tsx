@@ -1,5 +1,7 @@
 import {
   ArrowRight,
+  CaretRight,
+  CheckIcon,
   FileIcon,
   FileMdIcon,
   FilePdfIcon,
@@ -28,11 +30,13 @@ import {
   targetFromInsertionPoint,
   targetFromSelection,
 } from '../../lib/aiPromptTarget';
+import { AGENTS, AGENT_IDS, type AgentId } from '../../lib/agents';
 import { tauriClient } from '../../lib/tauri';
 import { useAiStore } from '../../stores/aiStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { useFolderStore } from '../../stores/folderStore';
 import { usePreflightStore } from '../../stores/preflightStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import type {
   DocumentReference,
   MarkdownFile,
@@ -47,6 +51,8 @@ import { selectionChipLabel } from './selectionChip';
 
 const COLLAPSE_ANIMATION_MS = 200;
 const PROMPT_ICON_HIDE_MS = 100;
+const plusMenuItemClass =
+  'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left font-chrome text-base leading-normal text-ink transition hover:bg-highlight';
 
 type MentionState = {
   start: number;
@@ -91,6 +97,9 @@ export function AIInputBar() {
   const [activeMentionIndex, setActiveMentionIndex] = useState(0);
   const [attachments, setAttachments] = useState<PromptAttachment[]>([]);
   const [dragActive, setDragActive] = useState(false);
+  const [plusMenuOpen, setPlusMenuOpen] = useState<'root' | 'agents' | null>(
+    null,
+  );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const promptSurfaceRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -122,7 +131,12 @@ export function AIInputBar() {
     (state) => state.dismissStreamPreview,
   );
   const markError = useAiStore((state) => state.markError);
-  const availability = usePreflightStore((state) => state.availability);
+  const selectedAgent = useSettingsStore((state) => state.settings.ai.selectedAgent);
+  const updateSettings = useSettingsStore((state) => state.update);
+  const availabilityByAgent = usePreflightStore(
+    (state) => state.availabilityByAgent,
+  );
+  const availability = availabilityByAgent[selectedAgent];
   const textValue = promptTextFromSegments(liveSegments);
   const documentReferences = useMemo(
     () => documentReferencesFromSegments(liveSegments),
@@ -136,8 +150,8 @@ export function AIInputBar() {
 
   useEffect(() => {
     if (folderPath && availability.status === 'ready')
-      void startSession(folderPath);
-  }, [availability.status, folderPath, startSession]);
+      void startSession(folderPath, selectedAgent);
+  }, [availability.status, folderPath, selectedAgent, startSession]);
 
   const previousInsertionKey = useRef<string | null>(null);
   useEffect(() => {
@@ -181,6 +195,7 @@ export function AIInputBar() {
 
     const handler = (event: { target: unknown }) => {
       if (containerRef.current?.contains(event.target as Node)) return;
+      setPlusMenuOpen(null);
       clearHighlightedSelection();
       clearInsertionPoint();
       setExpanded(false);
@@ -217,12 +232,13 @@ export function AIInputBar() {
     ? 'Open a folder first'
     : !filePath
       ? 'Select a document first'
-      : claudeDisabledReason(availability.status);
+      : agentDisabledReason(selectedAgent, availability.status);
   const disabled =
     Boolean(disabledReason) ||
     status === 'submitting' ||
     status === 'awaiting_clarification';
   const attachmentDisabled = disabled || status === 'streaming';
+  const plusDisabled = status === 'streaming';
   const busy =
     Boolean(promptFilePath) &&
     ['submitting', 'streaming', 'awaiting_clarification'].includes(status);
@@ -592,6 +608,18 @@ export function AIInputBar() {
     );
   }
 
+  async function selectAgent(agentId: AgentId) {
+    setPlusMenuOpen(null);
+    if (agentId === selectedAgent) return;
+    await updateSettings((current) => ({
+      ...current,
+      ai: {
+        ...current.ai,
+        selectedAgent: agentId,
+      },
+    }));
+  }
+
   function removePreviousDocumentSegment() {
     if (!editorRef.current) return false;
     const previousDocumentId = documentSegmentIdBeforeSelection(
@@ -665,6 +693,7 @@ export function AIInputBar() {
             return;
           }
           if (attachmentPickerActive.current) return;
+          setPlusMenuOpen(null);
           if (
             !textValue.trim() &&
             !selection &&
@@ -737,6 +766,83 @@ export function AIInputBar() {
                 ))}
               </div>
             ) : null}
+            {plusMenuOpen ? (
+              <div
+                role="menu"
+                aria-label={
+                  plusMenuOpen === 'agents' ? 'Select agent' : 'Add menu'
+                }
+                className="absolute bottom-full left-0 z-30 mb-2 min-w-44 rounded-lg border border-hairline bg-white p-1 font-chrome shadow-[0_16px_40px_rgb(42_42_42_/_16%)]"
+              >
+                {plusMenuOpen === 'root' ? (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={attachmentDisabled}
+                      className={clsx(
+                        plusMenuItemClass,
+                        'disabled:pointer-events-none disabled:opacity-40',
+                      )}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        attachmentPickerActive.current = true;
+                      }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setPlusMenuOpen(null);
+                        void openAttachmentPicker();
+                      }}
+                    >
+                      <FileIcon size={16} weight="bold" />
+                      Attach file
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-haspopup="menu"
+                      className={plusMenuItemClass}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setPlusMenuOpen('agents');
+                      }}
+                    >
+                      <span className="flex-1">Select agent</span>
+                      <span className="text-sm text-ink-soft">
+                        {AGENTS[selectedAgent].shortLabel}
+                      </span>
+                      <CaretRight
+                        size={14}
+                        weight="bold"
+                        className="shrink-0 text-ink-soft"
+                        aria-hidden
+                      />
+                    </button>
+                  </>
+                ) : (
+                  AGENT_IDS.map((agentId) => (
+                    <button
+                      key={agentId}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={selectedAgent === agentId}
+                      className={plusMenuItemClass}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void selectAgent(agentId);
+                      }}
+                    >
+                      <span className="flex-1">{AGENTS[agentId].label}</span>
+                      {selectedAgent === agentId ? (
+                        <CheckIcon size={15} weight="bold" className="text-success" />
+                      ) : null}
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
             <div
               ref={promptSurfaceRef}
               className={clsx(
@@ -756,22 +862,23 @@ export function AIInputBar() {
               onDrop={handlePromptDrop}
             >
               <span className={promptIconVisibilityClass}>
-                <Tooltip label="Attach files">
+                <Tooltip label="Add">
                   <button
                     type="button"
-                    aria-label="Attach files"
-                    disabled={attachmentDisabled}
+                    aria-label="Open add menu"
+                    aria-expanded={Boolean(plusMenuOpen)}
+                    aria-haspopup="menu"
+                    disabled={plusDisabled}
                     className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-chrome-text transition hover:bg-highlight focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 disabled:pointer-events-none disabled:opacity-40"
                     onMouseDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      attachmentPickerActive.current = true;
                       setExpanded(true);
                       setPromptVisible(true);
                     }}
                     onClick={(event) => {
                       event.stopPropagation();
-                      void openAttachmentPicker();
+                      setPlusMenuOpen((open) => (open ? null : 'root'));
                     }}
                   >
                     <PlusIcon size={18} weight="bold" />
@@ -1519,20 +1626,24 @@ function documentReferenceFromFile(file: MarkdownFile): DocumentReference {
   };
 }
 
-function claudeDisabledReason(
+function agentDisabledReason(
+  agentId: AgentId,
   status: ReturnType<
     typeof usePreflightStore.getState
-  >['availability']['status'],
+  >['availabilityByAgent'][AgentId]['status'],
 ) {
+  const label = AGENTS[agentId].label;
   switch (status) {
     case 'checking':
-      return 'Checking Claude Code setup';
+      return `Checking ${label} setup`;
     case 'missing':
-      return 'Install Claude Code to enable AI edits';
+      return `Install ${label} to enable AI edits`;
     case 'login_required':
-      return 'Run claude login, then re-check to enable AI edits';
+      return agentId === 'claude'
+        ? 'Run claude login, then re-check to enable AI edits'
+        : 'Sign in to Codex or set an API key, then re-check to enable AI edits';
     case 'check_failed':
-      return 'Re-check Claude Code in Settings to enable AI edits';
+      return `Re-check ${label} in Settings to enable AI edits`;
     case 'ready':
       return null;
   }
