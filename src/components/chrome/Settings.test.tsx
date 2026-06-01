@@ -14,6 +14,13 @@ const tauriMocks = vi.hoisted(() => ({
   openCodexInstaller: vi.fn(),
 }));
 
+function setNavigatorPlatform(platform: string) {
+  Object.defineProperty(window.navigator, 'platform', {
+    configurable: true,
+    value: platform,
+  });
+}
+
 vi.mock('@tauri-apps/plugin-shell', () => ({
   open: vi.fn(),
 }));
@@ -29,6 +36,7 @@ vi.mock('../../lib/tauri', () => ({
 
 describe('Settings', () => {
   beforeEach(() => {
+    setNavigatorPlatform('MacIntel');
     tauriMocks.openCodexInstaller.mockResolvedValue(undefined);
 
     const update = vi.fn(async (recipe: (settings: AppSettings) => AppSettings) => {
@@ -143,5 +151,30 @@ describe('Settings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Verify installation' }));
 
     expect(run).toHaveBeenCalledWith({ force: true, agentId: 'codex' });
+  });
+
+  it('hides the Codex ACP installer controls off macOS', () => {
+    setNavigatorPlatform('Linux x86_64');
+    usePreflightStore.setState((state) => ({
+      availabilityByAgent: {
+        ...state.availabilityByAgent,
+        codex: {
+          agentId: 'codex',
+          status: 'missing',
+          installed: false,
+          version: null,
+          loggedIn: false,
+          lastCheckedAt: null,
+          error: null,
+        },
+      },
+    }));
+
+    render(<Settings open onClose={() => undefined} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'AI' }));
+
+    expect(screen.queryByRole('button', { name: 'Install Codex ACP' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Install guide' })).toHaveLength(1);
   });
 });

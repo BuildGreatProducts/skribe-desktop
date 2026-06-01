@@ -54,6 +54,7 @@ type AgentErrorCode =
   | 'ACP_SIDECAR_FAILED';
 
 const require = createRequire(import.meta.url);
+const COMMAND_VERSION_TIMEOUT_MS = 3000;
 let current: ChildProcessWithoutNullStreams | null = null;
 let currentCancelled = false;
 
@@ -430,22 +431,51 @@ async function commandVersion(command: string, args: string[]): Promise<string |
       env: process.env,
     });
     let output = '';
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = null;
+      }
+      child.stdout.off('data', onStdout);
+      child.stderr.off('data', onStderr);
+      child.off('error', onError);
+      child.off('close', onClose);
+    };
+    const finish = (version: string | null) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolveVersion(version);
+    };
+    const onStdout = (chunk: string) => {
       output += chunk;
-    });
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => {
+    };
+    const onStderr = (chunk: string) => {
       output += chunk;
-    });
-    child.on('error', () => resolveVersion(null));
-    child.on('close', (code) => {
+    };
+    const onError = () => finish(null);
+    const onClose = (code: number | null) => {
       if (code !== 0) {
-        resolveVersion(null);
+        finish(null);
         return;
       }
-      resolveVersion(versionFromOutput(output));
-    });
+      finish(versionFromOutput(output));
+    };
+
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', onStdout);
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', onStderr);
+    child.on('error', onError);
+    child.on('close', onClose);
+    timeout = setTimeout(() => {
+      cleanup();
+      child.kill('SIGKILL');
+      finish(null);
+    }, COMMAND_VERSION_TIMEOUT_MS);
   });
 }
 

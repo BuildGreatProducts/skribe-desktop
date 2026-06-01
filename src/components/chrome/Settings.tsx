@@ -493,6 +493,7 @@ function AgentConnectionStatus({
   const agent = AGENTS[agentId];
   const copy = agentStatusCopy(agentId, status);
   const Icon = copy.icon;
+  const showCodexInstaller = agentId === 'codex' && isMacPlatform();
 
   return (
     <div className="rounded-md border border-hairline bg-chrome-bg p-3">
@@ -548,7 +549,7 @@ function AgentConnectionStatus({
       </div>
       {status === 'missing' ? (
         <div className="flex flex-wrap items-center gap-2">
-          {agentId === 'codex' ? (
+          {showCodexInstaller ? (
             <Button
               variant="secondary"
               className="h-8 border border-hairline bg-paper/60 px-2 text-xs"
@@ -564,7 +565,7 @@ function AgentConnectionStatus({
           >
             Install guide
           </Button>
-          {agentId === 'codex' && codexInstallerLaunched ? (
+          {showCodexInstaller && codexInstallerLaunched ? (
             <Button
               variant="secondary"
               className="h-8 gap-1 border border-hairline bg-paper/60 px-2 text-xs"
@@ -574,12 +575,12 @@ function AgentConnectionStatus({
               Verify installation
             </Button>
           ) : null}
-          {agentId === 'codex' && codexInstallerLaunched ? (
+          {showCodexInstaller && codexInstallerLaunched ? (
             <p className="basis-full text-xs text-chrome-text-soft">
               After Terminal finishes, return here and verify the installation.
             </p>
           ) : null}
-          {agentId === 'codex' && codexInstallerError ? (
+          {showCodexInstaller && codexInstallerError ? (
             <p className="basis-full text-xs text-error">{codexInstallerError}</p>
           ) : null}
         </div>
@@ -663,4 +664,8 @@ function formatLastChecked(lastCheckedAt: number | null) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(lastCheckedAt));
+}
+
+function isMacPlatform() {
+  return typeof window !== 'undefined' && /Mac/i.test(window.navigator.platform);
 }

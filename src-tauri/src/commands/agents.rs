@@ -1,7 +1,7 @@
 use crate::error::AppError;
 
 #[cfg(target_os = "macos")]
-use std::{fs, process::Command};
+use std::{io::Write, process::Command};
 
 #[cfg(target_os = "macos")]
 use std::os::unix::fs::PermissionsExt;
@@ -23,15 +23,24 @@ pub fn codex_acp_open_installer() -> Result<(), AppError> {
 
 #[cfg(target_os = "macos")]
 fn open_codex_acp_installer_macos() -> Result<(), AppError> {
-    let script_path = std::env::temp_dir().join("skribe-install-codex-acp.command");
-    fs::write(&script_path, codex_acp_install_script())?;
+    let mut script = tempfile::Builder::new()
+        .prefix("skribe-install-codex-acp-")
+        .suffix(".command")
+        .tempfile()
+        .map_err(|error| AppError::internal(format!("Could not create installer: {error}")))?;
+    script.write_all(codex_acp_install_script().as_bytes())?;
 
     #[cfg(unix)]
     {
-        let mut permissions = fs::metadata(&script_path)?.permissions();
+        let mut permissions = script.as_file().metadata()?.permissions();
         permissions.set_mode(0o755);
-        fs::set_permissions(&script_path, permissions)?;
+        script.as_file().set_permissions(permissions)?;
     }
+
+    let script_path = script
+        .into_temp_path()
+        .keep()
+        .map_err(|error| AppError::internal(format!("Could not prepare installer: {error}")))?;
 
     Command::new("/usr/bin/open")
         .arg(&script_path)
@@ -44,7 +53,7 @@ fn open_codex_acp_installer_macos() -> Result<(), AppError> {
 #[cfg(target_os = "macos")]
 fn codex_acp_install_script() -> &'static str {
     r#"#!/bin/zsh
-set -e
+set -u
 
 echo "Installing Codex ACP for Skribe..."
 echo
@@ -59,12 +68,19 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-npm install -g @zed-industries/codex-acp
+install_status=0
+npm install -g @zed-industries/codex-acp || install_status=$?
 
 GLOBAL_BIN="$(npm prefix -g 2>/dev/null)/bin"
 export PATH="$GLOBAL_BIN:$PATH"
 
 echo
+if [ "$install_status" -ne 0 ]; then
+  echo "Installation failed with exit code $install_status."
+  echo "See npm output above."
+  echo
+fi
+
 if command -v codex-acp >/dev/null 2>&1; then
   echo "Codex ACP installed:"
   codex-acp --version
@@ -89,6 +105,7 @@ mod tests {
         let script = super::codex_acp_install_script();
 
         assert!(script.contains("npm install -g @zed-industries/codex-acp"));
+        assert!(script.contains("Installation failed with exit code $install_status."));
         assert!(script.contains("codex-acp --version"));
         assert!(!script.contains("@openai/codex"));
     }
