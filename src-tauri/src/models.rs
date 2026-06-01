@@ -75,17 +75,12 @@ impl Default for WidgetSettings {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentId {
+    #[default]
     Claude,
     Codex,
-}
-
-impl Default for AgentId {
-    fn default() -> Self {
-        Self::Claude
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
