@@ -211,7 +211,7 @@ async function handleClaudePrompt(command: PromptCommand) {
   });
 
   current.on('close', (code) => {
-    if (spawnFailed) return;
+    if (spawnFailed || currentCancelled) return;
     const status = code === 0 ? 'ok' : 'error';
     const error = stderr.trim() || `Claude Code exited with ${code}`;
     emit({
