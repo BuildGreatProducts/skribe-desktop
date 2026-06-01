@@ -57,6 +57,7 @@ export const tauriClient = {
         agentId,
         force: options?.force ?? false,
       }),
+    openCodexInstaller: () => invoke<void>('codex_acp_open_installer'),
   },
   acp: {
     start: (folderPath: string, agentId: AgentId) =>

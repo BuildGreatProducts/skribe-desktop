@@ -18,6 +18,7 @@ import {
   CLAUDE_INSTALL_URL,
   copyClaudeLoginCommand,
 } from '../../lib/claudeSetup';
+import { errorMessage, tauriClient } from '../../lib/tauri';
 import { DEFAULT_GLOBAL_WRITING_INSTRUCTIONS } from '../../lib/writingInstructions';
 import { useFolderStore } from '../../stores/folderStore';
 import { usePreflightStore } from '../../stores/preflightStore';
@@ -44,6 +45,8 @@ const SETTINGS_TABS: Array<{ id: SettingsTab; label: string }> = [
 
 export function Settings({ open, onClose }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('editor');
+  const [codexInstallerLaunched, setCodexInstallerLaunched] = useState(false);
+  const [codexInstallerError, setCodexInstallerError] = useState<string | null>(null);
   const settings = useSettingsStore((state) => state.settings);
   const update = useSettingsStore((state) => state.update);
   const folderPath = useFolderStore((state) => state.path);
@@ -88,6 +91,16 @@ export function Settings({ open, onClose }: SettingsProps) {
     const nextIndex =
       (activeIndex + offset + SETTINGS_TABS.length) % SETTINGS_TABS.length;
     moveTabFocus(SETTINGS_TABS[nextIndex].id);
+  };
+
+  const openCodexInstaller = async () => {
+    setCodexInstallerError(null);
+    try {
+      await tauriClient.agents.openCodexInstaller();
+      setCodexInstallerLaunched(true);
+    } catch (error) {
+      setCodexInstallerError(errorMessage(error));
+    }
   };
 
   return (
@@ -390,6 +403,9 @@ export function Settings({ open, onClose }: SettingsProps) {
                     void copyClaudeLoginCommand().catch(() => undefined)
                   }
                   onRecheck={() => void runPreflight({ force: true, agentId })}
+                  onInstallCodex={() => void openCodexInstaller()}
+                  codexInstallerLaunched={codexInstallerLaunched}
+                  codexInstallerError={codexInstallerError}
                 />
               ))}
             </div>
@@ -454,6 +470,9 @@ type AgentConnectionStatusProps = {
   onInstallGuide: () => void;
   onCopyLogin: () => void;
   onRecheck: () => void;
+  onInstallCodex: () => void;
+  codexInstallerLaunched: boolean;
+  codexInstallerError: string | null;
 };
 
 function AgentConnectionStatus({
@@ -467,10 +486,14 @@ function AgentConnectionStatus({
   onInstallGuide,
   onCopyLogin,
   onRecheck,
+  onInstallCodex,
+  codexInstallerLaunched,
+  codexInstallerError,
 }: AgentConnectionStatusProps) {
   const agent = AGENTS[agentId];
   const copy = agentStatusCopy(agentId, status);
   const Icon = copy.icon;
+  const showCodexInstaller = agentId === 'codex' && isMacPlatform();
 
   return (
     <div className="rounded-md border border-hairline bg-chrome-bg p-3">
@@ -525,13 +548,42 @@ function AgentConnectionStatus({
         </div>
       </div>
       {status === 'missing' ? (
-        <Button
-          variant="secondary"
-          className="h-8 border border-hairline bg-paper/60 px-2 text-xs"
-          onClick={onInstallGuide}
-        >
-          Install guide
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {showCodexInstaller ? (
+            <Button
+              variant="secondary"
+              className="h-8 border border-hairline bg-paper/60 px-2 text-xs"
+              onClick={onInstallCodex}
+            >
+              Install Codex ACP
+            </Button>
+          ) : null}
+          <Button
+            variant="secondary"
+            className="h-8 border border-hairline bg-paper/60 px-2 text-xs"
+            onClick={onInstallGuide}
+          >
+            Install guide
+          </Button>
+          {showCodexInstaller && codexInstallerLaunched ? (
+            <Button
+              variant="secondary"
+              className="h-8 gap-1 border border-hairline bg-paper/60 px-2 text-xs"
+              onClick={onRecheck}
+              icon={<ArrowClockwise size={14} />}
+            >
+              Verify installation
+            </Button>
+          ) : null}
+          {showCodexInstaller && codexInstallerLaunched ? (
+            <p className="basis-full text-xs text-chrome-text-soft">
+              After Terminal finishes, return here and verify the installation.
+            </p>
+          ) : null}
+          {showCodexInstaller && codexInstallerError ? (
+            <p className="basis-full text-xs text-error">{codexInstallerError}</p>
+          ) : null}
+        </div>
       ) : null}
       {status === 'login_required' ? (
         <div className="flex flex-wrap gap-2">
@@ -612,4 +664,8 @@ function formatLastChecked(lastCheckedAt: number | null) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(lastCheckedAt));
+}
+
+function isMacPlatform() {
+  return typeof window !== 'undefined' && /Mac/i.test(window.navigator.platform);
 }

@@ -7,7 +7,7 @@ mod models;
 mod settings;
 mod state;
 
-use commands::{acp, claude, fs, settings as settings_commands};
+use commands::{acp, agents, claude, fs, settings as settings_commands};
 use state::{AcpState, PreflightState, WatcherState};
 
 fn main() {
@@ -52,6 +52,7 @@ fn main() {
             settings_commands::settings_add_recent_folder,
             claude::agent_preflight,
             claude::claude_preflight,
+            agents::codex_acp_open_installer,
             acp::acp_start,
             acp::acp_send_prompt,
             acp::acp_respond_clarification,

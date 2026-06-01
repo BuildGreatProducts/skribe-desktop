@@ -54,6 +54,7 @@ type AgentErrorCode =
   | 'ACP_SIDECAR_FAILED';
 
 const require = createRequire(import.meta.url);
+const COMMAND_VERSION_TIMEOUT_MS = 3000;
 let current: ChildProcessWithoutNullStreams | null = null;
 let currentCancelled = false;
 
@@ -88,12 +89,13 @@ function classifyAgentError(agentId: AgentId, message: string): AgentErrorCode {
 }
 
 async function packageVersion(agentId: AgentId): Promise<string | null> {
+  if (agentId === 'codex') {
+    const codex = await resolveCodexCommand();
+    return commandVersion(codex.command, [...codex.args, '--version']);
+  }
+
   try {
-    const pkgPath = require.resolve(
-      agentId === 'codex'
-        ? '@zed-industries/codex-acp/package.json'
-        : '@agentclientprotocol/claude-agent-acp/package.json',
-    );
+    const pkgPath = require.resolve('@agentclientprotocol/claude-agent-acp/package.json');
     const pkg = JSON.parse(await readFile(pkgPath, 'utf8')) as { version?: string };
     return pkg.version ?? null;
   } catch {
@@ -420,17 +422,65 @@ async function resolveCodexCommand(): Promise<{ command: string; args: string[] 
   const configured = process.env.CODEX_ACP_PATH?.trim();
   if (configured) return { command: configured, args: [] };
 
-  const pkgPath = require.resolve('@zed-industries/codex-acp/package.json');
-  const pkg = JSON.parse(await readFile(pkgPath, 'utf8')) as {
-    bin?: string | Record<string, string>;
-  };
-  const binPath =
-    typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.['codex-acp'];
-  if (!binPath) return { command: 'codex-acp', args: [] };
-  return {
-    command: process.execPath,
-    args: [resolve(dirname(pkgPath), binPath)],
-  };
+  return { command: 'codex-acp', args: [] };
+}
+
+async function commandVersion(command: string, args: string[]): Promise<string | null> {
+  return new Promise((resolveVersion) => {
+    const child = spawn(command, args, {
+      env: process.env,
+    });
+    let output = '';
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = null;
+      }
+      child.stdout.off('data', onStdout);
+      child.stderr.off('data', onStderr);
+      child.off('error', onError);
+      child.off('close', onClose);
+    };
+    const finish = (version: string | null) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolveVersion(version);
+    };
+    const onStdout = (chunk: string) => {
+      output += chunk;
+    };
+    const onStderr = (chunk: string) => {
+      output += chunk;
+    };
+    const onError = () => finish(null);
+    const onClose = (code: number | null) => {
+      if (code !== 0) {
+        finish(null);
+        return;
+      }
+      finish(versionFromOutput(output));
+    };
+
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', onStdout);
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', onStderr);
+    child.on('error', onError);
+    child.on('close', onClose);
+    timeout = setTimeout(() => {
+      cleanup();
+      child.kill('SIGKILL');
+      finish(null);
+    }, COMMAND_VERSION_TIMEOUT_MS);
+  });
+}
+
+function versionFromOutput(output: string): string | null {
+  return output.match(/\d+\.\d+\.\d+/)?.[0] ?? null;
 }
 
 async function safeWorkspacePath(
