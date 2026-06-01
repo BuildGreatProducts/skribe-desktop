@@ -121,8 +121,8 @@ function promptShell() {
 }
 
 function promptSurface() {
-  const attachButton = screen.getByRole('button', { name: 'Attach files' });
-  const surface = attachButton.closest('div');
+  const addButton = screen.getByRole('button', { name: 'Open add menu' });
+  const surface = addButton.closest('div');
   if (!surface) throw new Error('Prompt surface not found');
   return surface;
 }
@@ -136,10 +136,15 @@ function promptAction() {
 }
 
 function promptPlusIcon() {
-  const plus = screen.getByRole('button', { name: 'Attach files' });
+  const plus = screen.getByRole('button', { name: 'Open add menu' });
   const iconWrapper = plus.parentElement?.parentElement;
   if (!iconWrapper) throw new Error('Prompt plus icon wrapper not found');
   return iconWrapper;
+}
+
+function attachFilesFromAddMenu() {
+  fireEvent.click(screen.getByRole('button', { name: 'Open add menu' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Attach file' }));
 }
 
 function setPromptSurfaceRect(surface: HTMLElement) {
@@ -239,13 +244,25 @@ describe('AIInputBar selection collapse behavior', () => {
     useFolderStore.setState({ path: '/tmp/project', files });
     useEditorStore.setState({ filePath, highlightedSelection });
     usePreflightStore.setState({
-      availability: {
-        status: 'ready',
-        installed: true,
-        version: '1.0.0',
-        loggedIn: null,
-        lastCheckedAt: 1,
-        error: null,
+      availabilityByAgent: {
+        claude: {
+          agentId: 'claude',
+          status: 'ready',
+          installed: true,
+          version: '1.0.0',
+          loggedIn: null,
+          lastCheckedAt: 1,
+          error: null,
+        },
+        codex: {
+          agentId: 'codex',
+          status: 'ready',
+          installed: true,
+          version: '0.15.0',
+          loggedIn: null,
+          lastCheckedAt: 1,
+          error: null,
+        },
       },
     });
     useAiStore.setState({
@@ -386,7 +403,7 @@ describe('AIInputBar selection collapse behavior', () => {
     expect(surface).toHaveClass('ring-1');
     expect(surface).not.toHaveClass('border');
     expect(
-      screen.getByRole('button', { name: 'Attach files' }),
+      screen.getByRole('button', { name: 'Open add menu' }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Submit AI prompt' }),
@@ -543,7 +560,7 @@ describe('AIInputBar selection collapse behavior', () => {
     render(<AIInputBar />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open AI prompt' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Attach files' }));
+    attachFilesFromAddMenu();
     await flushPromises();
 
     expect(screen.getAllByLabelText('Attached file: image.png')).toHaveLength(
@@ -560,15 +577,16 @@ describe('AIInputBar selection collapse behavior', () => {
     render(<AIInputBar />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open AI prompt' }));
-    const attachButton = screen.getByRole('button', { name: 'Attach files' });
-    fireEvent.mouseDown(attachButton);
+    fireEvent.click(screen.getByRole('button', { name: 'Open add menu' }));
+    const attachItem = screen.getByRole('menuitem', { name: 'Attach file' });
+    fireEvent.mouseDown(attachItem);
     fireEvent.blur(promptEditor(), { relatedTarget: null });
 
     finishPromptCollapse();
 
     expect(promptEditor()).toBeInTheDocument();
 
-    fireEvent.click(attachButton);
+    fireEvent.click(attachItem);
     await flushPromises();
 
     expect(tauriMocks.open).toHaveBeenCalledWith({
@@ -588,7 +606,7 @@ describe('AIInputBar selection collapse behavior', () => {
     render(<AIInputBar />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open AI prompt' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Attach files' }));
+    attachFilesFromAddMenu();
     await flushPromises();
     expect(
       screen.getByLabelText('Attached file: image.png'),
@@ -622,7 +640,7 @@ describe('AIInputBar selection collapse behavior', () => {
     render(<AIInputBar />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open AI prompt' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Attach files' }));
+    attachFilesFromAddMenu();
     await flushPromises();
     expect(
       screen.getByLabelText('Attached file: image.png'),

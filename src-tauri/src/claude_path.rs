@@ -26,10 +26,22 @@ const PATH_ENTRY_SEPARATOR: char = ';';
 const PATH_ENTRY_SEPARATOR: char = ':';
 
 pub fn resolve_claude_binary() -> Option<PathBuf> {
-    env::var_os("CLAUDE_CODE_PATH")
+    resolve_binary("claude", "CLAUDE_CODE_PATH")
+}
+
+pub fn resolve_codex_acp_binary() -> Option<PathBuf> {
+    env::var_os("CODEX_ACP_PATH")
         .map(PathBuf::from)
         .filter(|path| is_executable(path))
-        .or_else(|| find_on_path("claude"))
+        .or_else(|| find_on_path("codex-acp"))
+        .or_else(resolve_bundled_codex_acp)
+}
+
+pub fn resolve_binary(binary: &str, override_env: &str) -> Option<PathBuf> {
+    env::var_os(override_env)
+        .map(PathBuf::from)
+        .filter(|path| is_executable(path))
+        .or_else(|| find_on_path(binary))
 }
 
 pub fn path_env() -> OsString {
@@ -65,6 +77,42 @@ fn executable_candidates(dir: &Path, binary: &str) -> Vec<PathBuf> {
     {
         vec![dir.join(binary)]
     }
+}
+
+fn resolve_bundled_codex_acp() -> Option<PathBuf> {
+    let relative = PathBuf::from("node_modules")
+        .join(".bin")
+        .join(if cfg!(windows) {
+            "codex-acp.cmd"
+        } else {
+            "codex-acp"
+        });
+
+    bundled_roots()
+        .into_iter()
+        .map(|root| root.join(&relative))
+        .find(|path| is_executable(path))
+}
+
+fn bundled_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+
+    if let Ok(current_exe) = env::current_exe() {
+        if let Some(exe_dir) = current_exe.parent() {
+            roots.push(exe_dir.to_path_buf());
+            roots.push(exe_dir.join(".."));
+            roots.push(exe_dir.join("../Resources"));
+            roots.push(exe_dir.join("../Resources/_up_"));
+        }
+    }
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    roots.push(manifest_dir.clone());
+    if let Some(root) = manifest_dir.parent() {
+        roots.push(root.to_path_buf());
+    }
+
+    roots
 }
 
 #[cfg(windows)]

@@ -1,9 +1,11 @@
 import { ArrowClockwise, ClipboardText } from '@phosphor-icons/react';
 import { open } from '@tauri-apps/plugin-shell';
+import { AGENTS } from '../../lib/agents';
 import { CLAUDE_INSTALL_URL, copyClaudeLoginCommand } from '../../lib/claudeSetup';
 import { useAiStore } from '../../stores/aiStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { usePreflightStore } from '../../stores/preflightStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { Button } from '../ui';
 
 export function ErrorState() {
@@ -16,6 +18,7 @@ export function ErrorState() {
   const submitPrompt = useAiStore((state) => state.submitPrompt);
   const filePath = useEditorStore((state) => state.filePath);
   const runPreflight = usePreflightStore((state) => state.run);
+  const selectedAgent = useSettingsStore((state) => state.settings.ai.selectedAgent);
   if (!error) return null;
 
   const retryFilePath = promptFilePath ?? filePath;
@@ -36,46 +39,59 @@ export function ErrorState() {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2 px-4 text-xs text-error">
       <span>{error.message}</span>
-      {error.code === 'CLAUDE_NOT_INSTALLED' ? (
+      {error.code === 'CLAUDE_NOT_INSTALLED' || error.code === 'CODEX_NOT_INSTALLED' ? (
         <>
           <Button
             variant="link"
             className="text-xs"
-            onClick={() => void open(CLAUDE_INSTALL_URL)}
+            onClick={() =>
+              void open(
+                selectedAgent === 'claude'
+                  ? CLAUDE_INSTALL_URL
+                  : AGENTS[selectedAgent].installUrl,
+              )
+            }
           >
             Install guide
           </Button>
           <Button
             variant="link"
             className="gap-1 text-xs"
-            onClick={() => void runPreflight({ force: true })}
+            onClick={() => void runPreflight({ force: true, agentId: selectedAgent })}
             icon={<ArrowClockwise size={13} />}
           >
             Re-check
           </Button>
         </>
       ) : null}
-      {error.code === 'CLAUDE_NOT_LOGGED_IN' ? (
+      {error.code === 'CLAUDE_NOT_LOGGED_IN' || error.code === 'CODEX_NOT_LOGGED_IN' ? (
         <>
+          {selectedAgent === 'claude' ? (
+            <Button
+              variant="link"
+              className="gap-1 text-xs"
+              onClick={() => void copyClaudeLoginCommand().catch(() => undefined)}
+              icon={<ClipboardText size={13} />}
+            >
+              Copy command
+            </Button>
+          ) : null}
           <Button
             variant="link"
             className="gap-1 text-xs"
-            onClick={() => void copyClaudeLoginCommand().catch(() => undefined)}
-            icon={<ClipboardText size={13} />}
-          >
-            Copy command
-          </Button>
-          <Button
-            variant="link"
-            className="gap-1 text-xs"
-            onClick={() => void runPreflight({ force: true })}
+            onClick={() => void runPreflight({ force: true, agentId: selectedAgent })}
             icon={<ArrowClockwise size={13} />}
           >
             Re-check
           </Button>
         </>
       ) : null}
-      {!['CLAUDE_NOT_INSTALLED', 'CLAUDE_NOT_LOGGED_IN'].includes(error.code) && canRetry ? (
+      {![
+        'CLAUDE_NOT_INSTALLED',
+        'CLAUDE_NOT_LOGGED_IN',
+        'CODEX_NOT_INSTALLED',
+        'CODEX_NOT_LOGGED_IN',
+      ].includes(error.code) && canRetry ? (
         <Button
           variant="link"
           className="text-xs"

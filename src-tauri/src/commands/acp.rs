@@ -33,7 +33,11 @@ struct SidecarEvent {
     error: Option<String>,
     code: Option<String>,
     version: Option<String>,
+    agent_id: Option<String>,
 }
+
+const CLAUDE_ACP_MIN_VERSION: &str = "0.31.2";
+const CODEX_ACP_MIN_VERSION: &str = "0.15.0";
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,8 +57,10 @@ pub struct InsertionContext {
 pub fn acp_start(
     app: AppHandle,
     folder_path: String,
+    agent_id: String,
     state: State<AcpState>,
 ) -> Result<AcpStartResponse, AppError> {
+    let agent_id = normalize_agent_id(&agent_id)?;
     let folder = fs::canonicalize(&folder_path)?;
     if !folder.is_dir() {
         return Err(AppError::FsInvalidPath(
@@ -68,12 +74,16 @@ pub fn acp_start(
     command
         .current_dir(folder)
         .env("PATH", claude_path::path_env())
+        .env("SKRIBE_AGENT_ID", &agent_id)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
     if let Some(claude_binary) = claude_path::resolve_claude_binary() {
         command.env("CLAUDE_CODE_PATH", claude_binary);
+    }
+    if let Some(codex_acp_binary) = claude_path::resolve_codex_acp_binary() {
+        command.env("CODEX_ACP_PATH", codex_acp_binary);
     }
 
     let mut child = command
@@ -98,7 +108,7 @@ pub fn acp_start(
 
     let mut process = AcpProcess { child, stdin };
     process
-        .write_json(&json!({ "type": "version", "sessionId": session_id }))
+        .write_json(&json!({ "type": "version", "sessionId": session_id, "agentId": agent_id }))
         .map_err(|error| AppError::AcpSidecarFailed(error.to_string()))?;
 
     state
@@ -114,6 +124,13 @@ pub fn acp_start(
     .map_err(|error| AppError::internal(error.to_string()))?;
 
     Ok(AcpStartResponse { session_id })
+}
+
+fn normalize_agent_id(agent_id: &str) -> Result<String, AppError> {
+    match agent_id {
+        "claude" | "codex" => Ok(agent_id.to_string()),
+        _ => Err(AppError::SettingsInvalid("Unsupported AI agent".into())),
+    }
 }
 
 #[tauri::command]
@@ -332,16 +349,22 @@ fn relay_event(app: &AppHandle, event: SidecarEvent) {
         }
         "version" => {
             if let Some(version) = event.version {
-                if semver_lt(&version, "0.31.2") {
-                    let _ = app.emit(
-                        "acp:complete",
-                        json!({
-                            "sessionId": session_id,
-                            "status": "error",
-                            "code": "ACP_PROTOCOL_ERROR",
-                            "error": format!("ACP package version {version} is below the required 0.31.2")
-                        }),
-                    );
+                let agent_id = event.agent_id.as_deref().unwrap_or("claude");
+                if let Some(minimum) = acp_min_version(agent_id) {
+                    if semver_lt(&version, minimum) {
+                        let _ = app.emit(
+                            "acp:complete",
+                            json!({
+                                "sessionId": session_id,
+                                "status": "error",
+                                "code": "ACP_PROTOCOL_ERROR",
+                                "terminateSession": true,
+                                "error": format!(
+                                    "ACP package version {version} is below the required {minimum}"
+                                )
+                            }),
+                        );
+                    }
                 }
             }
         }
@@ -440,6 +463,14 @@ fn target_sidecar_name() -> &'static str {
     }
 }
 
+fn acp_min_version(agent_id: &str) -> Option<&'static str> {
+    match agent_id {
+        "claude" => Some(CLAUDE_ACP_MIN_VERSION),
+        "codex" => Some(CODEX_ACP_MIN_VERSION),
+        _ => None,
+    }
+}
+
 fn semver_lt(actual: &str, minimum: &str) -> bool {
     let parse = |value: &str| {
         value
@@ -462,12 +493,20 @@ fn semver_lt(actual: &str, minimum: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::semver_lt;
+    use super::{acp_min_version, semver_lt};
 
     #[test]
     fn compares_semver_floor() {
         assert!(semver_lt("0.31.1", "0.31.2"));
         assert!(!semver_lt("0.31.2", "0.31.2"));
         assert!(!semver_lt("0.32.0", "0.31.2"));
+    }
+
+    #[test]
+    fn codex_acp_min_version_is_below_claude_floor() {
+        assert_eq!(acp_min_version("codex"), Some("0.15.0"));
+        assert!(!semver_lt("0.15.0", "0.15.0"));
+        assert!(semver_lt("0.14.9", "0.15.0"));
+        assert!(semver_lt("0.15.0", "0.31.2"));
     }
 }

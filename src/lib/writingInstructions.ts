@@ -1,3 +1,4 @@
+import { DEFAULT_AGENT_ID, isAgentId } from './agents';
 import type { AppSettings } from '../types';
 
 export const DEFAULT_GLOBAL_WRITING_INSTRUCTIONS = `Write like a careful human editor, not a content bot.
@@ -22,12 +23,21 @@ export function defaultedGlobalWritingInstructions(instructions: string): string
 
 export function settingsWithDefaultWritingInstructions(settings: AppSettings): AppSettings {
   const systemPrompt = defaultedGlobalWritingInstructions(settings.ai.systemPrompt);
-  if (systemPrompt === settings.ai.systemPrompt) return settings;
+  const selectedAgent = isAgentId(settings.ai.selectedAgent)
+    ? settings.ai.selectedAgent
+    : DEFAULT_AGENT_ID;
+  if (
+    systemPrompt === settings.ai.systemPrompt &&
+    selectedAgent === settings.ai.selectedAgent
+  ) {
+    return settings;
+  }
 
   return {
     ...settings,
     ai: {
       ...settings.ai,
+      selectedAgent,
       systemPrompt,
     },
   };

@@ -80,10 +80,16 @@ impl Default for WidgetSettings {
 pub struct AiSettings {
     #[serde(default)]
     pub dangerously_skip_permissions: bool,
+    #[serde(default = "default_selected_agent")]
+    pub selected_agent: String,
     #[serde(default = "default_system_prompt")]
     pub system_prompt: String,
     #[serde(default)]
     pub project_writing_instructions: BTreeMap<String, String>,
+}
+
+fn default_selected_agent() -> String {
+    "claude".to_string()
 }
 
 fn default_system_prompt() -> String {
@@ -130,6 +136,7 @@ impl Default for AppSettings {
             widgets: WidgetSettings::default(),
             ai: AiSettings {
                 dangerously_skip_permissions: false,
+                selected_agent: default_selected_agent(),
                 system_prompt: default_system_prompt(),
                 project_writing_instructions: BTreeMap::new(),
             },
@@ -145,10 +152,14 @@ impl Default for AppSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaudePreflight {
+    #[serde(default = "default_selected_agent")]
+    pub agent_id: String,
     pub installed: bool,
     pub version: Option<String>,
     pub logged_in: bool,
 }
+
+pub type AgentPreflight = ClaudePreflight;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

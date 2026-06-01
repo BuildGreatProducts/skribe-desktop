@@ -9,6 +9,12 @@ import clsx from 'clsx';
 import { open as openExternal } from '@tauri-apps/plugin-shell';
 import { useState, type KeyboardEvent } from 'react';
 import {
+  AGENTS,
+  AGENT_IDS,
+  DEFAULT_AGENT_ID,
+  type AgentId,
+} from '../../lib/agents';
+import {
   CLAUDE_INSTALL_URL,
   copyClaudeLoginCommand,
 } from '../../lib/claudeSetup';
@@ -42,8 +48,9 @@ export function Settings({ open, onClose }: SettingsProps) {
   const update = useSettingsStore((state) => state.update);
   const folderPath = useFolderStore((state) => state.path);
   const sessionFolderPath = folderPath ? normalizeFolderPath(folderPath) : null;
-  const availability = usePreflightStore((state) => state.availability);
+  const availabilityByAgent = usePreflightStore((state) => state.availabilityByAgent);
   const runPreflight = usePreflightStore((state) => state.run);
+  const selectedAgent = settings.ai.selectedAgent;
   const dangerouslySkipPermissions = useSessionSettingsStore((state) =>
     sessionFolderPath
       ? state.dangerouslySkipPermissionsByFolder[sessionFolderPath] === true
@@ -345,6 +352,7 @@ export function Settings({ open, onClose }: SettingsProps) {
                     ...current,
                     ai: {
                       ...current.ai,
+                      selectedAgent: DEFAULT_AGENT_ID,
                       systemPrompt: DEFAULT_GLOBAL_WRITING_INSTRUCTIONS,
                     },
                   })).then(() => {
@@ -355,17 +363,36 @@ export function Settings({ open, onClose }: SettingsProps) {
                 Reset
               </Button>
             </div>
-            <ClaudeCodeStatus
-              status={availability.status}
-              version={availability.version}
-              error={availability.error}
-              lastCheckedAt={availability.lastCheckedAt}
-              onInstallGuide={() => void openExternal(CLAUDE_INSTALL_URL)}
-              onCopyLogin={() =>
-                void copyClaudeLoginCommand().catch(() => undefined)
-              }
-              onRecheck={() => void runPreflight({ force: true })}
-            />
+            <div className="mb-4 space-y-2">
+              {AGENT_IDS.map((agentId) => (
+                <AgentConnectionStatus
+                  key={agentId}
+                  agentId={agentId}
+                  active={selectedAgent === agentId}
+                  status={availabilityByAgent[agentId].status}
+                  version={availabilityByAgent[agentId].version}
+                  error={availabilityByAgent[agentId].error}
+                  lastCheckedAt={availabilityByAgent[agentId].lastCheckedAt}
+                  onSelect={() =>
+                    void update((current) => ({
+                      ...current,
+                      ai: { ...current.ai, selectedAgent: agentId },
+                    }))
+                  }
+                  onInstallGuide={() =>
+                    void openExternal(
+                      agentId === 'claude'
+                        ? CLAUDE_INSTALL_URL
+                        : AGENTS[agentId].installUrl,
+                    )
+                  }
+                  onCopyLogin={() =>
+                    void copyClaudeLoginCommand().catch(() => undefined)
+                  }
+                  onRecheck={() => void runPreflight({ force: true, agentId })}
+                />
+              ))}
+            </div>
             <Toggle
               label="Dangerously skip Claude Code permissions"
               checked={dangerouslySkipPermissions}
@@ -414,35 +441,43 @@ function settingsPanelClass(active: boolean) {
   );
 }
 
-type ClaudeCodeStatusProps = {
+type AgentConnectionStatusProps = {
+  agentId: AgentId;
+  active: boolean;
   status: ReturnType<
     typeof usePreflightStore.getState
-  >['availability']['status'];
+  >['availabilityByAgent'][AgentId]['status'];
   version: string | null;
   error: string | null;
   lastCheckedAt: number | null;
+  onSelect: () => void;
   onInstallGuide: () => void;
   onCopyLogin: () => void;
   onRecheck: () => void;
 };
 
-function ClaudeCodeStatus({
+function AgentConnectionStatus({
+  agentId,
+  active,
   status,
   version,
   error,
   lastCheckedAt,
+  onSelect,
   onInstallGuide,
   onCopyLogin,
   onRecheck,
-}: ClaudeCodeStatusProps) {
-  const copy = claudeStatusCopy(status);
+}: AgentConnectionStatusProps) {
+  const agent = AGENTS[agentId];
+  const copy = agentStatusCopy(agentId, status);
   const Icon = copy.icon;
 
   return (
-    <div className="mb-4 rounded-md border border-hairline bg-chrome-bg p-3">
+    <div className="rounded-md border border-hairline bg-chrome-bg p-3">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-ink">{agent.label}</span>
             <span
               className={clsx(
                 'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-semibold',
@@ -455,6 +490,11 @@ function ClaudeCodeStatus({
             {version ? (
               <span className="text-xs text-ink-soft">{version}</span>
             ) : null}
+            {active ? (
+              <span className="rounded-sm bg-paper px-2 py-1 text-xs font-semibold text-ink-soft">
+                Selected
+              </span>
+            ) : null}
           </div>
           <p className="mt-2 text-sm text-ink-soft">{copy.description}</p>
           {status === 'check_failed' && error ? (
@@ -464,14 +504,25 @@ function ClaudeCodeStatus({
             Last checked {formatLastChecked(lastCheckedAt)}
           </p>
         </div>
-        <Button
-          variant="secondary"
-          className="h-8 shrink-0 gap-1 border border-hairline bg-paper/60 px-2 text-xs"
-          onClick={onRecheck}
-          icon={<ArrowClockwise size={14} />}
-        >
-          {status === 'check_failed' ? 'Try again' : 'Re-check'}
-        </Button>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {!active ? (
+            <Button
+              variant="secondary"
+              className="h-8 border border-hairline bg-paper/60 px-2 text-xs"
+              onClick={onSelect}
+            >
+              Use
+            </Button>
+          ) : null}
+          <Button
+            variant="secondary"
+            className="h-8 gap-1 border border-hairline bg-paper/60 px-2 text-xs"
+            onClick={onRecheck}
+            icon={<ArrowClockwise size={14} />}
+          >
+            {status === 'check_failed' ? 'Try again' : 'Re-check'}
+          </Button>
+        </div>
       </div>
       {status === 'missing' ? (
         <Button
@@ -484,14 +535,16 @@ function ClaudeCodeStatus({
       ) : null}
       {status === 'login_required' ? (
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            className="h-8 gap-1 border border-hairline bg-paper/60 px-2 text-xs"
-            onClick={onCopyLogin}
-            icon={<ClipboardText size={14} />}
-          >
-            Copy claude login
-          </Button>
+          {agentId === 'claude' ? (
+            <Button
+              variant="secondary"
+              className="h-8 gap-1 border border-hairline bg-paper/60 px-2 text-xs"
+              onClick={onCopyLogin}
+              icon={<ClipboardText size={14} />}
+            >
+              Copy claude login
+            </Button>
+          ) : null}
           <Button
             variant="secondary"
             className="h-8 gap-1 border border-hairline bg-paper/60 px-2 text-xs"
@@ -506,41 +559,47 @@ function ClaudeCodeStatus({
   );
 }
 
-function claudeStatusCopy(status: ClaudeCodeStatusProps['status']) {
+function agentStatusCopy(
+  agentId: AgentId,
+  status: AgentConnectionStatusProps['status'],
+) {
+  const agent = AGENTS[agentId];
   switch (status) {
     case 'checking':
       return {
         label: 'Checking',
-        description: 'Looking for Claude Code on this Mac.',
+        description: `Looking for ${agent.label} on this Mac.`,
         badgeClassName: 'bg-highlight text-ink',
         icon: ArrowClockwise,
       };
     case 'ready':
       return {
         label: 'Ready',
-        description:
-          'Claude Code is available. Login will be checked when a request runs.',
+        description: agent.readyDescription,
         badgeClassName: 'bg-selection text-ink',
         icon: CheckCircle,
       };
     case 'missing':
       return {
         label: 'Missing',
-        description: 'Install Claude Code to enable AI edits in Skribe.',
+        description: agent.missingDescription,
         badgeClassName: 'bg-highlight text-warning',
         icon: WarningCircle,
       };
     case 'login_required':
       return {
         label: 'Login required',
-        description: 'Run claude login in your terminal, then re-check here.',
+        description:
+          agentId === 'claude'
+            ? 'Run claude login in your terminal, then re-check here.'
+            : 'Sign in to Codex or set OPENAI_API_KEY/CODEX_API_KEY, then re-check here.',
         badgeClassName: 'bg-highlight text-warning',
         icon: WarningCircle,
       };
     case 'check_failed':
       return {
         label: 'Check failed',
-        description: 'Skribe could not check Claude Code status.',
+        description: `Skribe could not check ${agent.label} status.`,
         badgeClassName: 'bg-highlight text-error',
         icon: XCircle,
       };

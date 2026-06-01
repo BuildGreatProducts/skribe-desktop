@@ -1,4 +1,4 @@
-use crate::models::ClaudePreflight;
+use crate::models::AgentPreflight;
 use notify::RecommendedWatcher;
 use std::{
     collections::HashMap,
@@ -24,7 +24,7 @@ impl Default for WatcherState {
 
 #[derive(Default)]
 pub struct PreflightState {
-    pub result: Mutex<Option<ClaudePreflight>>,
+    pub result: Mutex<HashMap<String, AgentPreflight>>,
 }
 
 pub struct AcpProcess {

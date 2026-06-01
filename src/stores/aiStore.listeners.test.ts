@@ -10,7 +10,10 @@ function installMocks({
   dangerouslySkipPermissions?: boolean;
 } = {}) {
   const preflightState = {
-    availability: { status: 'ready' },
+    availabilityByAgent: {
+      claude: { status: 'ready' },
+      codex: { status: 'ready' },
+    },
     markLoginRequired: vi.fn(),
     markMissing: vi.fn(),
   };
@@ -35,6 +38,7 @@ function installMocks({
   const settingsState = {
     settings: {
       ai: {
+        selectedAgent: 'claude',
         systemPrompt: 'Keep the voice spare and precise.',
         projectWritingInstructions,
         dangerouslySkipPermissions,
@@ -128,6 +132,39 @@ describe('AI store listener setup', () => {
     expect(tauriClient.acp.start).toHaveBeenCalledTimes(2);
     expect(tauriClient.acp.sendPrompt).toHaveBeenCalledTimes(2);
     expect(useAiStore.getState().status).toBe('streaming');
+  });
+
+  it('terminates the active session when startup reports a protocol error', async () => {
+    const { acpEvents, tauriClient } = installMocks();
+    const { useAiStore } = await import('./aiStore');
+
+    await useAiStore.getState().startSession('/tmp/project');
+    const completeCalls = acpEvents.onComplete.mock.calls as unknown as Array<
+      [
+        (event: {
+          sessionId: string;
+          status: 'ok' | 'error';
+          code?: string;
+          error?: string;
+          terminateSession?: boolean;
+        }) => void,
+      ]
+    >;
+    const onComplete = completeCalls[0][0];
+
+    onComplete({
+      sessionId: 'session-1',
+      status: 'error',
+      code: 'ACP_PROTOCOL_ERROR',
+      error: 'ACP package version 0.14.9 is below the required 0.15.0',
+      terminateSession: true,
+    });
+
+    expect(tauriClient.acp.stop).toHaveBeenCalledWith('session-1');
+    expect(useAiStore.getState().sessionId).toBeNull();
+    expect(useAiStore.getState().sessionAgentId).toBeNull();
+    expect(useAiStore.getState().status).toBe('error');
+    expect(useAiStore.getState().error?.code).toBe('ACP_PROTOCOL_ERROR');
   });
 
   it('submits project writing instructions alongside global writing instructions', async () => {

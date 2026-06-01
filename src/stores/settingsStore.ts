@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { DEFAULT_AGENT_ID } from '../lib/agents';
 import { errorMessage, tauriClient } from '../lib/tauri';
 import {
   DEFAULT_GLOBAL_WRITING_INSTRUCTIONS,
@@ -26,6 +27,7 @@ export const defaultSettings: AppSettings = {
   },
   ai: {
     dangerouslySkipPermissions: false,
+    selectedAgent: DEFAULT_AGENT_ID,
     systemPrompt: DEFAULT_GLOBAL_WRITING_INSTRUCTIONS,
     projectWritingInstructions: {},
   },

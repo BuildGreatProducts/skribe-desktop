@@ -1,7 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { AgentId } from './agents';
 import type {
   AppErrorCode,
   AppSettings,
+  AgentPreflight,
   ClaudePreflight,
   DocumentReference,
   InsertionContext,
@@ -49,8 +51,16 @@ export const tauriClient = {
     preflight: (options?: { force?: boolean }) =>
       invoke<ClaudePreflight>('claude_preflight', { force: options?.force ?? false }),
   },
+  agents: {
+    preflight: (agentId: AgentId, options?: { force?: boolean }) =>
+      invoke<AgentPreflight>('agent_preflight', {
+        agentId,
+        force: options?.force ?? false,
+      }),
+  },
   acp: {
-    start: (folderPath: string) => invoke<{ sessionId: string }>('acp_start', { folderPath }),
+    start: (folderPath: string, agentId: AgentId) =>
+      invoke<{ sessionId: string }>('acp_start', { folderPath, agentId }),
     sendPrompt: (
       sessionId: string,
       prompt: string,

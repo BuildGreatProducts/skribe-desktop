@@ -27,6 +27,7 @@ const baseSettings: AppSettings = {
   },
   ai: {
     dangerouslySkipPermissions: false,
+    selectedAgent: 'claude',
     systemPrompt: DEFAULT_GLOBAL_WRITING_INSTRUCTIONS,
     projectWritingInstructions: {},
   },

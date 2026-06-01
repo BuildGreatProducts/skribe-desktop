@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { acpEvents } from '../lib/acp';
+import { AGENTS, DEFAULT_AGENT_ID, type AgentId } from '../lib/agents';
 import { documentPromptTarget, selectedTextForPromptTarget } from '../lib/aiPromptTarget';
 import { buildMarkedDocument } from '../lib/insertionMarker';
 import { errorMessage, tauriClient } from '../lib/tauri';
@@ -59,6 +60,7 @@ export function streamPreviewFromDelta(
 
 type AiState = {
   sessionId: string | null;
+  sessionAgentId: AgentId | null;
   status: AiStatus;
   prompt: string;
   promptFilePath: string | null;
@@ -71,7 +73,7 @@ type AiState = {
   error: AiError | null;
   listenersReady: boolean;
   acceptingStream: boolean;
-  startSession: (folderPath: string) => Promise<void>;
+  startSession: (folderPath: string, agentId?: AgentId) => Promise<void>;
   stopSession: () => Promise<void>;
   submitPrompt: (
     prompt: string,
@@ -89,6 +91,7 @@ type AiState = {
 
 export const useAiStore = create<AiState>((set, get) => ({
   sessionId: null,
+  sessionAgentId: null,
   status: 'idle',
   prompt: '',
   promptFilePath: null,
@@ -123,14 +126,22 @@ export const useAiStore = create<AiState>((set, get) => ({
         if (event.sessionId !== get().sessionId) return;
         if (event.status === 'ok' && !get().acceptingStream) return;
         if (event.status === 'error') {
-          const error = classifyAiError(event.error, event.code);
-          if (error.code === 'CLAUDE_NOT_LOGGED_IN') {
-            usePreflightStore.getState().markLoginRequired(error.message);
+          const agentId = get().sessionAgentId ?? selectedAgentId();
+          const error = classifyAiError(event.error, event.code, agentId);
+          const shouldTerminateSession = event.terminateSession === true;
+          if (error.code === 'CLAUDE_NOT_LOGGED_IN' || error.code === 'CODEX_NOT_LOGGED_IN') {
+            usePreflightStore.getState().markLoginRequired(agentId, error.message);
           }
-          if (error.code === 'CLAUDE_NOT_INSTALLED') {
-            usePreflightStore.getState().markMissing(error.message);
+          if (error.code === 'CLAUDE_NOT_INSTALLED' || error.code === 'CODEX_NOT_INSTALLED') {
+            usePreflightStore.getState().markMissing(agentId, error.message);
+          }
+          if (shouldTerminateSession) {
+            void tauriClient.acp.stop(event.sessionId).catch(() => undefined);
           }
           set({
+            ...(shouldTerminateSession
+              ? { sessionId: null, sessionAgentId: null, pendingClarification: null }
+              : {}),
             status: 'error',
             error,
             streamPreview: hiddenStreamPreview,
@@ -148,7 +159,11 @@ export const useAiStore = create<AiState>((set, get) => ({
           void tauriClient.fs.writeFile(state.promptFilePath, state.partialResponse).catch((error) => {
             set({
               status: 'error',
-              error: classifyAiError(errorMessage(error)),
+              error: classifyAiError(
+                errorMessage(error),
+                undefined,
+                state.sessionAgentId ?? selectedAgentId(),
+              ),
             });
           });
         }
@@ -198,20 +213,22 @@ export const useAiStore = create<AiState>((set, get) => ({
       });
     await listenerSetupPromise;
   },
-  startSession: async (folderPath) => {
+  startSession: async (folderPath, agentId = selectedAgentId()) => {
     startSessionPromise ??= (async () => {
       await get().ensureListeners();
-      const setupStatus = usePreflightStore.getState().availability.status;
+      const setupStatus =
+        usePreflightStore.getState().availabilityByAgent[agentId].status;
       if (setupStatus !== 'ready') return;
-      if (get().sessionId) return;
+      if (get().sessionId && get().sessionAgentId === agentId) return;
+      if (get().sessionId) await get().stopSession();
       set({ error: null, streamPreview: hiddenStreamPreview });
       try {
-        const { sessionId } = await tauriClient.acp.start(folderPath);
-        set({ sessionId, status: 'idle', partialResponse: '' });
+        const { sessionId } = await tauriClient.acp.start(folderPath, agentId);
+        set({ sessionId, sessionAgentId: agentId, status: 'idle', partialResponse: '' });
       } catch (error) {
         set({
           status: 'error',
-          error: classifyAiError(errorMessage(error)),
+          error: classifyAiError(errorMessage(error), undefined, agentId),
           streamPreview: hiddenStreamPreview,
           acceptingStream: false,
         });
@@ -228,6 +245,7 @@ export const useAiStore = create<AiState>((set, get) => ({
     }
     set({
       sessionId: null,
+      sessionAgentId: null,
       status: 'idle',
       partialResponse: '',
       promptFilePath: null,
@@ -249,10 +267,11 @@ export const useAiStore = create<AiState>((set, get) => ({
   ) => {
     if (!prompt.trim()) return;
     let sessionId = get().sessionId;
-    if (!sessionId) {
+    const agentId = selectedAgentId();
+    if (!sessionId || get().sessionAgentId !== agentId) {
       const folderPath = useFolderStore.getState().path;
       if (!folderPath) return;
-      await get().startSession(folderPath);
+      await get().startSession(folderPath, agentId);
       sessionId = get().sessionId;
     }
     if (!sessionId || !prompt.trim()) return;
@@ -269,7 +288,7 @@ export const useAiStore = create<AiState>((set, get) => ({
     if (promptTarget.type === 'insertion' && !insertion) {
       set({
         status: 'error',
-        error: classifyAiError(undefined, 'AI_INSERTION_STALE'),
+        error: classifyAiError(undefined, 'AI_INSERTION_STALE', agentId),
         streamPreview: hiddenStreamPreview,
         acceptingStream: false,
       });
@@ -315,10 +334,10 @@ export const useAiStore = create<AiState>((set, get) => ({
       let promptError = error;
       if (isBrokenSidecarPipeError(error)) {
         await tauriClient.acp.stop(sessionId).catch(() => undefined);
-        set({ sessionId: null });
+        set({ sessionId: null, sessionAgentId: null });
         const folderPath = useFolderStore.getState().path;
         if (folderPath) {
-          await get().startSession(folderPath);
+          await get().startSession(folderPath, agentId);
           const restartedSessionId = get().sessionId;
           if (restartedSessionId) {
             try {
@@ -332,7 +351,7 @@ export const useAiStore = create<AiState>((set, get) => ({
         }
       }
 
-      const aiError = classifyAiError(errorMessage(promptError));
+      const aiError = classifyAiError(errorMessage(promptError), undefined, agentId);
       set({
         status: 'error',
         error: aiError,
@@ -384,44 +403,60 @@ export const useAiStore = create<AiState>((set, get) => ({
   },
 }));
 
-function classifyAiError(message = 'Claude Code reported an error.', code?: AppErrorCode): AiError {
+function selectedAgentId(): AgentId {
+  return useSettingsStore.getState().settings.ai.selectedAgent ?? DEFAULT_AGENT_ID;
+}
+
+function classifyAiError(
+  message = 'The selected agent reported an error.',
+  code?: AppErrorCode,
+  agentId: AgentId = selectedAgentId(),
+): AiError {
   const normalized = message.toLowerCase();
+  const errorPrefix = agentId === 'codex' ? 'CODEX' : 'CLAUDE';
   const inferredCode =
     code ??
-    (/(claude login|not logged|login required|auth|unauthorized|api key|credentials)/.test(
+    (/(claude login|codex auth|not logged|login required|auth|required|unauthorized|api key|credentials|openai_api_key|codex_api_key)/.test(
       normalized,
     )
-      ? 'CLAUDE_NOT_LOGGED_IN'
-      : /(enoent|not found|no such file|install claude|command not found)/.test(normalized)
-        ? 'CLAUDE_NOT_INSTALLED'
+      ? `${errorPrefix}_NOT_LOGGED_IN`
+      : /(enoent|not found|no such file|install claude|install codex|command not found)/.test(normalized)
+        ? `${errorPrefix}_NOT_INSTALLED`
         : /(rate limit|too many requests|quota|429)/.test(normalized)
-          ? 'CLAUDE_RATE_LIMITED'
+          ? `${errorPrefix}_RATE_LIMITED`
           : /(broken pipe|os error 32|pipe closed|sidecar.*crash)/.test(normalized)
             ? 'ACP_SIDECAR_FAILED'
             : /(network|connection|econn|timed out|timeout|dns|fetch failed)/.test(normalized)
-            ? 'CLAUDE_NETWORK_ERROR'
-            : 'CLAUDE_UNKNOWN_ERROR');
+            ? `${errorPrefix}_NETWORK_ERROR`
+            : `${errorPrefix}_UNKNOWN_ERROR`) as AppErrorCode;
 
   switch (inferredCode) {
     case 'CLAUDE_NOT_LOGGED_IN':
+    case 'CODEX_NOT_LOGGED_IN':
       return {
         code: inferredCode,
-        message: 'Run claude login in your terminal to enable AI edits.',
+        message:
+          agentId === 'claude'
+            ? 'Run claude login in your terminal to enable AI edits.'
+            : 'Sign in to Codex or set OPENAI_API_KEY/CODEX_API_KEY to enable AI edits.',
       };
     case 'CLAUDE_NOT_INSTALLED':
+    case 'CODEX_NOT_INSTALLED':
       return {
         code: inferredCode,
-        message: 'Install Claude Code to enable AI edits.',
+        message: `Install ${AGENTS[agentId].label} to enable AI edits.`,
       };
     case 'CLAUDE_RATE_LIMITED':
+    case 'CODEX_RATE_LIMITED':
       return {
         code: inferredCode,
-        message: 'Claude Code is rate limited. Wait a moment, then retry.',
+        message: `${AGENTS[agentId].label} is rate limited. Wait a moment, then retry.`,
       };
     case 'CLAUDE_NETWORK_ERROR':
+    case 'CODEX_NETWORK_ERROR':
       return {
         code: inferredCode,
-        message: 'Claude Code could not reach the network. Check your connection, then retry.',
+        message: `${AGENTS[agentId].label} could not reach the network. Check your connection, then retry.`,
       };
     case 'ACP_SIDECAR_FAILED':
       return {
@@ -431,13 +466,13 @@ function classifyAiError(message = 'Claude Code reported an error.', code?: AppE
     case 'AI_SELECTION_STALE':
       return {
         code: inferredCode,
-        message: 'The selected text changed before Claude finished. Select it again and retry.',
+        message: `The selected text changed before ${AGENTS[agentId].label} finished. Select it again and retry.`,
       };
     case 'AI_INSERTION_STALE':
       return {
         code: inferredCode,
         message:
-          'The document changed before Claude finished. Pick the insertion point again and retry.',
+          `The document changed before ${AGENTS[agentId].label} finished. Pick the insertion point again and retry.`,
       };
     default:
       return {

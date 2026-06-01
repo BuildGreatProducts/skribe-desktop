@@ -5,7 +5,7 @@
   "identifier": "app.skribe.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build && npm run tauri:resources",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
@@ -39,7 +39,11 @@
     "targets": ["app"],
     "createUpdaterArtifacts": false,
     "externalBin": ["binaries/acp-sidecar"],
-    "resources": ["../sidecar-acp/dist", "../references"],
+    "resources": {
+      "../sidecar-acp/dist/": "sidecar-acp/dist/",
+      "build-resources/node_modules/": "node_modules/",
+      "../references/": "references/"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
