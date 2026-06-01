@@ -80,18 +80,68 @@ fn executable_candidates(dir: &Path, binary: &str) -> Vec<PathBuf> {
 }
 
 fn resolve_bundled_codex_acp() -> Option<PathBuf> {
-    let relative = PathBuf::from("node_modules")
-        .join(".bin")
-        .join(if cfg!(windows) {
-            "codex-acp.cmd"
-        } else {
-            "codex-acp"
-        });
-
+    let relative_candidates = bundled_codex_acp_relative_candidates();
     bundled_roots()
         .into_iter()
-        .map(|root| root.join(&relative))
+        .flat_map(|root| {
+            relative_candidates
+                .iter()
+                .map(move |relative| root.join(relative))
+        })
         .find(|path| is_executable(path))
+}
+
+fn bundled_codex_acp_relative_candidates() -> Vec<PathBuf> {
+    let binary_name = if cfg!(windows) {
+        "codex-acp.exe"
+    } else {
+        "codex-acp"
+    };
+    let mut candidates = Vec::new();
+    if let Some(platform_package) = codex_acp_platform_package() {
+        candidates.push(
+            PathBuf::from("node_modules")
+                .join("@zed-industries")
+                .join(platform_package)
+                .join("bin")
+                .join(binary_name),
+        );
+    }
+    candidates.push(
+        PathBuf::from("node_modules")
+            .join("@zed-industries")
+            .join("codex-acp")
+            .join("bin")
+            .join("codex-acp.js"),
+    );
+    candidates.push(
+        PathBuf::from("node_modules")
+            .join(".bin")
+            .join(if cfg!(windows) {
+                "codex-acp.cmd"
+            } else {
+                "codex-acp"
+            }),
+    );
+    candidates
+}
+
+fn codex_acp_platform_package() -> Option<&'static str> {
+    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        Some("codex-acp-darwin-arm64")
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        Some("codex-acp-darwin-x64")
+    } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+        Some("codex-acp-linux-arm64")
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        Some("codex-acp-linux-x64")
+    } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+        Some("codex-acp-win32-arm64")
+    } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+        Some("codex-acp-win32-x64")
+    } else {
+        None
+    }
 }
 
 fn bundled_roots() -> Vec<PathBuf> {

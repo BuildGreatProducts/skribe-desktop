@@ -26,6 +26,9 @@ jobs:
       - name: Prepare sidecar
         run: npm run sidecar:prepare
 
+      - name: Prepare Tauri resources
+        run: npm run tauri:resources
+
       - name: Build frontend
         run: npm run build
 

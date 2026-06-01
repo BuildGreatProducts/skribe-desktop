@@ -1,12 +1,17 @@
 import { ArrowClockwise, ClipboardText } from '@phosphor-icons/react';
 import { open } from '@tauri-apps/plugin-shell';
-import { AGENTS } from '../../lib/agents';
+import { AGENTS, type AgentId } from '../../lib/agents';
 import { CLAUDE_INSTALL_URL, copyClaudeLoginCommand } from '../../lib/claudeSetup';
 import { useAiStore } from '../../stores/aiStore';
 import { useEditorStore } from '../../stores/editorStore';
 import { usePreflightStore } from '../../stores/preflightStore';
-import { useSettingsStore } from '../../stores/settingsStore';
 import { Button } from '../ui';
+
+function agentFromErrorCode(code: string): AgentId | null {
+  if (code.startsWith('CLAUDE_')) return 'claude';
+  if (code.startsWith('CODEX_')) return 'codex';
+  return null;
+}
 
 export function ErrorState() {
   const error = useAiStore((state) => state.error);
@@ -18,9 +23,15 @@ export function ErrorState() {
   const submitPrompt = useAiStore((state) => state.submitPrompt);
   const filePath = useEditorStore((state) => state.filePath);
   const runPreflight = usePreflightStore((state) => state.run);
-  const selectedAgent = useSettingsStore((state) => state.settings.ai.selectedAgent);
   if (!error) return null;
 
+  const errorAgent = agentFromErrorCode(error.code);
+  const installUrl =
+    errorAgent === 'claude'
+      ? CLAUDE_INSTALL_URL
+      : errorAgent
+        ? AGENTS[errorAgent].installUrl
+        : CLAUDE_INSTALL_URL;
   const retryFilePath = promptFilePath ?? filePath;
   const targetMatchesFile =
     promptTarget.type === 'document'
@@ -44,20 +55,18 @@ export function ErrorState() {
           <Button
             variant="link"
             className="text-xs"
-            onClick={() =>
-              void open(
-                selectedAgent === 'claude'
-                  ? CLAUDE_INSTALL_URL
-                  : AGENTS[selectedAgent].installUrl,
-              )
-            }
+            onClick={() => void open(installUrl)}
           >
             Install guide
           </Button>
           <Button
             variant="link"
             className="gap-1 text-xs"
-            onClick={() => void runPreflight({ force: true, agentId: selectedAgent })}
+            onClick={() =>
+              errorAgent
+                ? void runPreflight({ force: true, agentId: errorAgent })
+                : undefined
+            }
             icon={<ArrowClockwise size={13} />}
           >
             Re-check
@@ -66,7 +75,7 @@ export function ErrorState() {
       ) : null}
       {error.code === 'CLAUDE_NOT_LOGGED_IN' || error.code === 'CODEX_NOT_LOGGED_IN' ? (
         <>
-          {selectedAgent === 'claude' ? (
+          {errorAgent === 'claude' ? (
             <Button
               variant="link"
               className="gap-1 text-xs"
@@ -79,7 +88,11 @@ export function ErrorState() {
           <Button
             variant="link"
             className="gap-1 text-xs"
-            onClick={() => void runPreflight({ force: true, agentId: selectedAgent })}
+            onClick={() =>
+              errorAgent
+                ? void runPreflight({ force: true, agentId: errorAgent })
+                : undefined
+            }
             icon={<ArrowClockwise size={13} />}
           >
             Re-check

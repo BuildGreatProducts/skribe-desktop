@@ -55,6 +55,7 @@ type AgentErrorCode =
 
 const require = createRequire(import.meta.url);
 let current: ChildProcessWithoutNullStreams | null = null;
+let currentCancelled = false;
 
 function emit(payload: Record<string, unknown>) {
   process.stdout.write(`${JSON.stringify(payload)}\n`);
@@ -128,6 +129,7 @@ async function handleClaudePrompt(command: PromptCommand) {
   });
 
   const attachmentDirectories = directoriesForAttachments(command.attachments);
+  currentCancelled = false;
   current = spawn(
     process.env.CLAUDE_CODE_PATH?.trim() || 'claude',
     buildClaudeArgs(command.systemPrompt, attachmentDirectories, {
@@ -251,6 +253,7 @@ async function handleCodexPrompt(command: PromptCommand) {
   const attachmentDirectories = directoriesForAttachments(command.attachments);
   const codex = await resolveCodexCommand();
 
+  currentCancelled = false;
   current = spawn(codex.command, codex.args, {
     cwd: process.cwd(),
     env: process.env,
@@ -265,6 +268,7 @@ async function handleCodexPrompt(command: PromptCommand) {
 
   current.on('error', (error: NodeJS.ErrnoException) => {
     spawnFailed = true;
+    if (currentCancelled) return;
     emit({
       type: 'complete',
       sessionId: command.sessionId,
@@ -288,7 +292,11 @@ async function handleCodexPrompt(command: PromptCommand) {
       Writable.toWeb(child.stdin),
       Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
     );
-    const client = new SkribeAcpClient(command.sessionId);
+    const client = new SkribeAcpClient(
+      command.sessionId,
+      command.dangerouslySkipPermissions === true,
+      attachmentDirectories,
+    );
     const connection = new acp.ClientSideConnection(() => client, stream);
 
     await connection.initialize({
@@ -310,9 +318,11 @@ async function handleCodexPrompt(command: PromptCommand) {
       prompt: [{ type: 'text', text: scaffolded }],
     });
 
-    emit({ type: 'complete', sessionId: command.sessionId, status: 'ok' });
+    if (!currentCancelled) {
+      emit({ type: 'complete', sessionId: command.sessionId, status: 'ok' });
+    }
   } catch (error) {
-    if (!spawnFailed) {
+    if (!spawnFailed && !currentCancelled) {
       const message =
         error instanceof Error ? error.message : stderr.trim() || String(error);
       emit({
@@ -326,21 +336,30 @@ async function handleCodexPrompt(command: PromptCommand) {
   } finally {
     current?.kill('SIGTERM');
     current = null;
-    if (!spawnFailed) {
+    if (!spawnFailed && !currentCancelled) {
       emit({ type: 'status', sessionId: command.sessionId, status: 'ready' });
     }
   }
 }
 
 class SkribeAcpClient implements acp.Client {
-  constructor(private readonly skribeSessionId: string) {}
+  private readonly readRoots: string[];
+
+  constructor(
+    private readonly skribeSessionId: string,
+    private readonly dangerouslySkipPermissions: boolean,
+    additionalDirectories: string[],
+  ) {
+    this.readRoots = [process.cwd(), ...additionalDirectories];
+  }
 
   async requestPermission(
     params: acp.RequestPermissionRequest,
   ): Promise<acp.RequestPermissionResponse> {
-    const option =
-      params.options.find((candidate) => /allow|approve/i.test(candidate.name)) ??
-      params.options[0];
+    if (!this.dangerouslySkipPermissions) {
+      return { outcome: { outcome: 'cancelled' as const } };
+    }
+    const option = params.options.find((candidate) => /allow|approve/i.test(candidate.name));
     if (!option) {
       return { outcome: { outcome: 'cancelled' as const } };
     }
@@ -380,7 +399,7 @@ class SkribeAcpClient implements acp.Client {
   }
 
   async readTextFile(params: acp.ReadTextFileRequest) {
-    const filePath = await safeWorkspacePath(String(params.path ?? ''));
+    const filePath = await safeWorkspacePath(String(params.path ?? ''), this.readRoots);
     return {
       content: await readFile(filePath, 'utf8'),
     };
@@ -414,15 +433,21 @@ async function resolveCodexCommand(): Promise<{ command: string; args: string[] 
   };
 }
 
-async function safeWorkspacePath(requestedPath: string): Promise<string> {
+async function safeWorkspacePath(
+  requestedPath: string,
+  allowedRoots: string[],
+): Promise<string> {
   const lexicalWorkspace = resolve(process.cwd());
   const absolute = resolve(lexicalWorkspace, requestedPath);
-  const [workspace, target] = await Promise.all([
-    realpath(lexicalWorkspace),
+  const [target, ...roots] = await Promise.all([
     realpath(absolute),
+    ...allowedRoots.map((root) => realpath(resolve(root))),
   ]);
-  const relativePath = relative(workspace, target);
-  if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+  const isAllowed = roots.some((root) => {
+    const relativePath = relative(root, target);
+    return !relativePath.startsWith('..') && !isAbsolute(relativePath);
+  });
+  if (!isAllowed) {
     throw new Error('Codex requested a file outside the open folder.');
   }
   return target;
@@ -470,6 +495,7 @@ rl.on('line', async (line) => {
       return;
     }
     if (command.type === 'cancel') {
+      currentCancelled = true;
       current?.kill('SIGTERM');
       current = null;
       emit({ type: 'complete', sessionId: command.sessionId, status: 'ok' });

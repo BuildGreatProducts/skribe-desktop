@@ -586,7 +586,7 @@ describe('AIInputBar selection collapse behavior', () => {
 
     expect(promptEditor()).toBeInTheDocument();
 
-    fireEvent.click(attachItem);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Attach file' }));
     await flushPromises();
 
     expect(tauriMocks.open).toHaveBeenCalledWith({

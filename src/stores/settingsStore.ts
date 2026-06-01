@@ -52,15 +52,44 @@ function applyAccent(settings: AppSettings) {
   document.documentElement.dataset.accent = settings.editor.accentColor;
 }
 
+function settingsWithDefaults(settings: AppSettings): AppSettings {
+  const partial = settings as Partial<AppSettings>;
+  const ai = partial.ai ?? defaultSettings.ai;
+  return settingsWithDefaultWritingInstructions({
+    ...defaultSettings,
+    ...settings,
+    editor: {
+      ...defaultSettings.editor,
+      ...partial.editor,
+    },
+    ui: {
+      ...defaultSettings.ui,
+      ...partial.ui,
+    },
+    widgets: {
+      ...defaultSettings.widgets,
+      ...partial.widgets,
+    },
+    ai: {
+      ...defaultSettings.ai,
+      ...ai,
+      projectWritingInstructions:
+        ai.projectWritingInstructions ?? defaultSettings.ai.projectWritingInstructions,
+    },
+    preflight: {
+      ...defaultSettings.preflight,
+      ...partial.preflight,
+    },
+  });
+}
+
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: defaultSettings,
   loaded: false,
   error: null,
   load: async () => {
     try {
-      const settings = settingsWithDefaultWritingInstructions(
-        await tauriClient.settings.load(),
-      );
+      const settings = settingsWithDefaults(await tauriClient.settings.load());
       applyAccent(settings);
       set({ settings, loaded: true, error: null });
     } catch (error) {
@@ -78,7 +107,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   addRecentFolder: async (folderPath) => {
     try {
-      const settings = settingsWithDefaultWritingInstructions(
+      const settings = settingsWithDefaults(
         await tauriClient.settings.addRecentFolder(folderPath),
       );
       applyAccent(settings);

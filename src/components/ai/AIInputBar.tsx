@@ -618,9 +618,6 @@ export function AIInputBar() {
         selectedAgent: agentId,
       },
     }));
-    if (folderPath && availabilityByAgent[agentId].status === 'ready') {
-      await startSession(folderPath, agentId);
-    }
   }
 
   function removePreviousDocumentSegment() {

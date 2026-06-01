@@ -33,7 +33,6 @@ struct SidecarEvent {
     error: Option<String>,
     code: Option<String>,
     version: Option<String>,
-    agent_id: Option<String>,
 }
 
 const CLAUDE_ACP_MIN_VERSION: &str = "0.31.2";
@@ -106,7 +105,11 @@ pub fn acp_start(
     spawn_stdout_relay(app.clone(), session_id.clone(), stdout);
     spawn_stderr_drain(stderr);
 
-    let mut process = AcpProcess { child, stdin };
+    let mut process = AcpProcess {
+        child,
+        stdin,
+        agent_id: agent_id.clone(),
+    };
     process
         .write_json(&json!({ "type": "version", "sessionId": session_id, "agentId": agent_id }))
         .map_err(|error| AppError::AcpSidecarFailed(error.to_string()))?;
@@ -265,23 +268,45 @@ fn spawn_stdout_relay(app: AppHandle, session_id: String, stdout: std::process::
 }
 
 fn mark_session_crashed(app: &AppHandle, session_id: &str) {
-    let state = app.state::<AcpState>();
-    let sessions = state.sessions.lock();
-    let removed = match sessions {
-        Ok(mut sessions) => sessions.remove(session_id),
-        Err(poisoned) => {
-            eprintln!("ACP session state mutex poisoned while marking session crashed");
-            let mut sessions = poisoned.into_inner();
-            sessions.remove(session_id)
-        }
-    };
-
-    if let Some(mut process) = removed {
+    if let Some(mut process) = remove_session(app, session_id) {
         let _ = process.child.kill();
         let _ = app.emit(
             "acp:status",
             json!({ "sessionId": session_id, "status": "crashed" }),
         );
+    }
+}
+
+fn session_agent_id(app: &AppHandle, session_id: &str) -> Option<String> {
+    let state = app.state::<AcpState>();
+    let agent_id = match state.sessions.lock() {
+        Ok(sessions) => sessions.get(session_id).map(|session| session.agent_id.clone()),
+        Err(poisoned) => {
+            eprintln!("ACP session state mutex poisoned while reading session agent");
+            let sessions = poisoned.into_inner();
+            sessions.get(session_id).map(|session| session.agent_id.clone())
+        }
+    };
+    agent_id
+}
+
+fn remove_session(app: &AppHandle, session_id: &str) -> Option<AcpProcess> {
+    let state = app.state::<AcpState>();
+    let removed = match state.sessions.lock() {
+        Ok(mut sessions) => sessions.remove(session_id),
+        Err(poisoned) => {
+            eprintln!("ACP session state mutex poisoned while removing session");
+            let mut sessions = poisoned.into_inner();
+            sessions.remove(session_id)
+        }
+    };
+    removed
+}
+
+fn terminate_session(app: &AppHandle, session_id: &str) {
+    if let Some(mut process) = remove_session(app, session_id) {
+        let _ = process.child.kill();
+        let _ = process.child.wait();
     }
 }
 
@@ -349,8 +374,9 @@ fn relay_event(app: &AppHandle, event: SidecarEvent) {
         }
         "version" => {
             if let Some(version) = event.version {
-                let agent_id = event.agent_id.as_deref().unwrap_or("claude");
-                if let Some(minimum) = acp_min_version(agent_id) {
+                let agent_id =
+                    session_agent_id(app, &session_id).unwrap_or_else(|| "claude".to_string());
+                if let Some(minimum) = acp_min_version(agent_id.as_str()) {
                     if semver_lt(&version, minimum) {
                         let _ = app.emit(
                             "acp:complete",
@@ -364,6 +390,7 @@ fn relay_event(app: &AppHandle, event: SidecarEvent) {
                                 )
                             }),
                         );
+                        terminate_session(app, &session_id);
                     }
                 }
             }

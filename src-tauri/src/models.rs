@@ -75,21 +75,34 @@ impl Default for WidgetSettings {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentId {
+    Claude,
+    Codex,
+}
+
+impl Default for AgentId {
+    fn default() -> Self {
+        Self::Claude
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiSettings {
     #[serde(default)]
     pub dangerously_skip_permissions: bool,
     #[serde(default = "default_selected_agent")]
-    pub selected_agent: String,
+    pub selected_agent: AgentId,
     #[serde(default = "default_system_prompt")]
     pub system_prompt: String,
     #[serde(default)]
     pub project_writing_instructions: BTreeMap<String, String>,
 }
 
-fn default_selected_agent() -> String {
-    "claude".to_string()
+fn default_selected_agent() -> AgentId {
+    AgentId::Claude
 }
 
 fn default_system_prompt() -> String {
@@ -153,7 +166,7 @@ impl Default for AppSettings {
 #[serde(rename_all = "camelCase")]
 pub struct ClaudePreflight {
     #[serde(default = "default_selected_agent")]
-    pub agent_id: String,
+    pub agent_id: AgentId,
     pub installed: bool,
     pub version: Option<String>,
     pub logged_in: bool,
@@ -176,7 +189,7 @@ pub struct FsChangePayload {
 
 #[cfg(test)]
 mod tests {
-    use super::AppSettings;
+    use super::{AgentId, AppSettings};
 
     #[test]
     fn deserializes_legacy_settings_with_defaults() {
@@ -211,6 +224,7 @@ mod tests {
             .system_prompt
             .contains("Write like a careful human editor"));
         assert!(!settings.ai.dangerously_skip_permissions);
+        assert_eq!(settings.ai.selected_agent, AgentId::Claude);
         assert!(settings.ai.project_writing_instructions.is_empty());
         assert!(settings.widgets.word_count);
         assert!(settings.widgets.character_count);
@@ -252,5 +266,36 @@ mod tests {
         assert!(!settings.widgets.word_count);
         assert!(settings.widgets.character_count);
         assert!(settings.widgets.reading_level);
+    }
+
+    #[test]
+    fn rejects_invalid_agent_ids() {
+        let error = serde_json::from_str::<AppSettings>(
+            r#"{
+              "schemaVersion": 1,
+              "recentFolders": [],
+              "lastOpenedFolder": null,
+              "editor": {
+                "fontSize": 18,
+                "accentColor": "deep-ink",
+                "lineHeight": 1.7
+              },
+              "ui": {
+                "fileTreeWidth": 240,
+                "showStatusLine": true
+              },
+              "ai": {
+                "selectedAgent": "not-real"
+              },
+              "preflight": {
+                "claudeCodeDetected": false,
+                "claudeCodeVersion": null,
+                "lastDetectedAt": 0
+              }
+            }"#,
+        )
+        .expect_err("invalid agent IDs should be rejected");
+
+        assert!(error.to_string().contains("unknown variant"));
     }
 }

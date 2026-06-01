@@ -5,7 +5,7 @@
   "identifier": "app.skribe.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build && npm run tauri:resources",
+    "beforeBuildCommand": "npm run sidecar:prepare && npm run build && npm run tauri:resources",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },

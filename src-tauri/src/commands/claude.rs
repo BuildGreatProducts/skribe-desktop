@@ -1,4 +1,9 @@
-use crate::{claude_path, error::AppError, models::AgentPreflight, state::PreflightState};
+use crate::{
+    claude_path,
+    error::AppError,
+    models::{AgentId, AgentPreflight},
+    state::PreflightState,
+};
 use std::{
     collections::HashMap,
     process::Command,
@@ -55,7 +60,7 @@ fn run_preflight(
 fn run_claude_preflight() -> AgentPreflight {
     let Some(claude_binary) = claude_path::resolve_claude_binary() else {
         return AgentPreflight {
-            agent_id: "claude".to_string(),
+            agent_id: AgentId::Claude,
             installed: false,
             version: None,
             logged_in: false,
@@ -72,7 +77,7 @@ fn run_claude_preflight() -> AgentPreflight {
         .filter(|version| !version.is_empty());
 
     AgentPreflight {
-        agent_id: "claude".to_string(),
+        agent_id: AgentId::Claude,
         installed: true,
         version,
         // Claude Code does not expose a cheap stable login probe. The first request surfaces auth errors.
@@ -83,7 +88,7 @@ fn run_claude_preflight() -> AgentPreflight {
 fn run_codex_preflight() -> AgentPreflight {
     let Some(codex_binary) = claude_path::resolve_codex_acp_binary() else {
         return AgentPreflight {
-            agent_id: "codex".to_string(),
+            agent_id: AgentId::Codex,
             installed: false,
             version: None,
             logged_in: false,
@@ -107,7 +112,7 @@ fn run_codex_preflight() -> AgentPreflight {
         .filter(|version| !version.is_empty());
 
     AgentPreflight {
-        agent_id: "codex".to_string(),
+        agent_id: AgentId::Codex,
         installed: true,
         version,
         // Codex ACP supports multiple auth methods; the first request reports missing auth.

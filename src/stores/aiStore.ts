@@ -122,7 +122,7 @@ export const useAiStore = create<AiState>((set, get) => ({
           ),
         }));
       }),
-      acpEvents.onComplete((event) => {
+      acpEvents.onComplete(async (event) => {
         if (event.sessionId !== get().sessionId) return;
         if (event.status === 'ok' && !get().acceptingStream) return;
         if (event.status === 'error') {
@@ -136,7 +136,7 @@ export const useAiStore = create<AiState>((set, get) => ({
             usePreflightStore.getState().markMissing(agentId, error.message);
           }
           if (shouldTerminateSession) {
-            void tauriClient.acp.stop(event.sessionId).catch(() => undefined);
+            await tauriClient.acp.stop(event.sessionId).catch(() => undefined);
           }
           set({
             ...(shouldTerminateSession

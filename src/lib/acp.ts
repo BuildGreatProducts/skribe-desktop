@@ -9,8 +9,10 @@ import type {
 export const acpEvents = {
   onTextDelta: (handler: (event: AcpTextDeltaEvent) => void) =>
     listen<AcpTextDeltaEvent>('acp:text_delta', ({ payload }) => handler(payload)),
-  onComplete: (handler: (event: AcpCompleteEvent) => void) =>
-    listen<AcpCompleteEvent>('acp:complete', ({ payload }) => handler(payload)),
+  onComplete: (handler: (event: AcpCompleteEvent) => void | Promise<void>) =>
+    listen<AcpCompleteEvent>('acp:complete', ({ payload }) => {
+      void handler(payload);
+    }),
   onStatus: (handler: (event: AcpStatusEvent) => void) =>
     listen<AcpStatusEvent>('acp:status', ({ payload }) => handler(payload)),
   onUserInputRequired: (handler: (event: AcpUserInputRequiredEvent) => void) =>

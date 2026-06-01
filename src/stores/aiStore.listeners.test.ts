@@ -147,12 +147,12 @@ describe('AI store listener setup', () => {
           code?: string;
           error?: string;
           terminateSession?: boolean;
-        }) => void,
+        }) => void | Promise<void>,
       ]
     >;
     const onComplete = completeCalls[0][0];
 
-    onComplete({
+    await onComplete({
       sessionId: 'session-1',
       status: 'error',
       code: 'ACP_PROTOCOL_ERROR',

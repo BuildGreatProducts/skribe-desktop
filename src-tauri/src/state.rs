@@ -30,6 +30,7 @@ pub struct PreflightState {
 pub struct AcpProcess {
     pub child: Child,
     pub stdin: ChildStdin,
+    pub agent_id: String,
 }
 
 impl AcpProcess {
