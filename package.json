@@ -1,7 +1,7 @@
 {
   "name": "skribe",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "description": "A Mac-native markdown writing app where Claude Code edits documents in real time.",
   "homepage": "https://skribe.app",

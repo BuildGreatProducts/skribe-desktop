@@ -1,6 +1,6 @@
 [package]
 name = "skribe"
-version = "0.1.6"
+version = "0.1.7"
 description = "A Mac-native markdown writing app where Claude Code edits documents in real time."
 authors = ["Skribe contributors"]
 license = "MIT"
